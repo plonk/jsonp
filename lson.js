@@ -49,6 +49,8 @@ var Evaluator = function (opts) {
   );
 
   this.evaluating = false;
+  this.syscall = null;
+  this.syscallResult = null;
 };
 
 Evaluator.for_all_adjacent_pairs_p = function (arr, binary_func) {
@@ -214,10 +216,11 @@ Evaluator.prototype.apply_function = function(func, args) {
       var [_, name1] = func;
       return this.apply_builtin_function(name1, args);
     default:
-      throw new Error();
+      console.debug(func);
+      throw new Error("invalid function");
     }
   } else {
-    throw new Error();
+    throw new Error("invalid function (not an Array)");
   }
 };
 
@@ -301,6 +304,14 @@ Evaluator.prototype.eval_form = function(form, env) {
     var body_env = new_bindings.concat(env);
     return args.slice(1).reduce((acc, expr) => self.eval(expr, body_env), null);
     break;
+  case "getchar":
+    this.syscall = ["getchar"];
+    console.log("syscall start");
+    return () => {
+      console.log("thunk: " + this.syscallResult);
+      return this.syscallResult;
+    };
+    break;
   default:
     var macro_func = AL.lookup(this.macros, name);
     if (macro_func) {
@@ -340,10 +351,18 @@ Evaluator.prototype.startEval = function (exp, env) {
 };
 
 Evaluator.prototype.step = function () {
+  console.log("step");
   if (!this.evaluating)
     throw new Error("not evaluating");
 
-  this.value = this.value();
+  if (typeof(this.value) === 'function') {
+    console.log("before", this.value);
+    this.value = this.value();
+    console.log("after", this.value);
+  } else {
+    console.log("not a function", this.value);
+    throw TypeError('this.value is not a function');
+  }
   this.evaluating = (typeof(this.value) == 'function');
 };
 
@@ -356,3 +375,10 @@ if (e.eval(undefined,[]) !== undefined) throw new Error();
 if (e.eval("x",[["x",10]]) !== 10) throw new Error();
 if (e.eval(["+",1,1],[]) !== 2) throw new Error();
 // console.log( e.eval(["+",1,1], []) );
+
+Evaluator.prototype.syscallEnd = function (value) {
+  this.syscall = null;
+  this.syscallResult = value;
+  console.log("syscall end", this.syscallResult, this.value);
+  this.evaluating = true;
+};

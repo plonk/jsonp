@@ -4,9 +4,6 @@
     <meta charset="utf-8">
     <title>JSONP</title>
     <script src="node_modules/jquery/dist/jquery.min.js"></script>
-    <script>
-      window.jQuery = $;
-    </script>
     <link rel="stylesheet" href="bower_components/bootstrap/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="bower_components/bootstrap/dist/css/bootstrap-theme.min.css">
     <script src="bower_components/bootstrap/dist/js/bootstrap.min.js"></script>
@@ -15,29 +12,36 @@
     <script src="matter-module/matter-module.js"></script>
     <script src="lson.js"></script>
     <script src="renderer.js"></script>
+    <script src="jsonp.js"></script>
     <link rel="stylesheet" href="index.css">
   </head>
   <body style="background-color: #111">
-    <div id="screen-outer" style="position: relative">
-      <canvas id="bottom-layer" style="position: absolute; left: 0; top: 0; z-index: 0" width=640 height=384></canvas>
-      <canvas id="top-layer"    style="position: absolute; left: 0; top: 0; z-index: 1" width=640 height=384></canvas>
-    </div>
 
-    <div style="margin-top: 10px; margin-left: 15px; color: #eee; margin-right: 10px">
-      <span id="indicator-offline" style="font-size: 20px; color: #333">●</span>
-      <span id="indicator-online" style="display: none; text-shadow: 0px 0px 10px red; font-size: 20px; color: #f10">●</span>
-      <span style="margin-right: 0.5em; ">ON LINE</span>
-      <span id="indicator-no-sticky" style="font-size: 20px; color: #333">●</span>
-      <span id="indicator-sticky" style="display: none; text-shadow: 0px 0px 10px red; font-size: 20px; color: #f10">●</span>
-      <span style="margin-right: 0.5em; ">STICKY</span>
-      <span id="indicator-no-lock" style="font-size: 20px; color: #333">●</span>
-      <span id="indicator-lock" style="display: none; text-shadow: 0px 0px 10px red; font-size: 20px; color: #f10">●</span>
-      <span style="margin-right: 0.5em; ">CTRL LOCK</span>
-      <button id="connect-button" class="btn btn-default long-button">CONNECT</button>
-      <button id="input-button" class="btn btn-default long-button">INPUT</button>
-      <br>
-    </div>
+    <div class="container">
+      <textarea class="form-control" id="progn" style="font-family: monospace; background-color: #BBB; color: black; min-width: 40em; height: 10em"></textarea>
+      <input class="form-control" id="prognSendButton" value="Send" type="button">
 
+      <div id="screen-outer" style="position: relative">
+        <canvas id="bottom-layer" style="position: absolute; left: 0; top: 0; z-index: 0" width=640 height=384></canvas>
+        <canvas id="top-layer"    style="position: absolute; left: 0; top: 0; z-index: 1" width=640 height=384></canvas>
+      </div>
+
+      <div style="margin-top: 10px; margin-left: 15px; color: #eee; margin-right: 10px">
+        <span id="indicator-idle" style="font-size: 20px; color: #333">●</span>
+        <span id="indicator-busy" style="display: none; text-shadow: 0px 0px 10px red; font-size: 20px; color: #f10">●</span>
+        <span style="margin-right: 0.5em; ">BUSY</span>
+        <span id="indicator-no-sticky" style="font-size: 20px; color: #333">●</span>
+        <span id="indicator-sticky" style="display: none; text-shadow: 0px 0px 10px red; font-size: 20px; color: #f10">●</span>
+        <span style="margin-right: 0.5em; ">STICKY</span>
+        <span id="indicator-no-lock" style="font-size: 20px; color: #333">●</span>
+        <span id="indicator-lock" style="display: none; text-shadow: 0px 0px 10px red; font-size: 20px; color: #f10">●</span>
+        <span style="margin-right: 0.5em; ">CTRL LOCK</span>
+        <button id="connect-button" class="btn btn-default long-button">CONNECT</button>
+        <button id="input-button" class="btn btn-default long-button">INPUT</button>
+        <br>
+      </div>
+
+    </div>
     <!-- ******************************************************************** -->
 
     <div class="modal fade" id="inputModal" tabindex="-1" role="dialog">
@@ -52,7 +56,7 @@
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-default" data-dismiss="modal" style="min-width: 100px">キャンセル</button>
-            <button type="button" class="btn btn-primary" onclick="enterText()" style="min-width: 100px">OK</button>
+            <button type="button" class="btn btn-primary" id="modalInputButton" style="min-width: 100px">OK</button>
           </div>
         </div><!-- /.modal-content -->
       </div><!-- /.modal-dialog -->
