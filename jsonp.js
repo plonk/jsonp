@@ -1,24 +1,87 @@
 'use strict';
 
+// string → [type, value, string]
+function readFromString(str) {
+  var m;
+  if (str === "") {
+    return ["error", "empty string", str];
+  } else if (m = (/^\.[^0-9A-Za-z]/).exec(str)) { // 適当すぎか。
+    return ["dot", ".", str.slice(1)];
+  } else if (m = (/^'/).exec(str)) {
+    var [type, value, rest] = readFromString(str.slice(1));
+    if (type === "sexp")
+      return ["sexp", cons(intern("quote"), cons(value, null)), rest];
+    else
+      return [type, value, rest]; // error
+  } else if (m = (/^#t/).exec(str)) {
+    return ["sexp", true, str.slice(2)];
+  } else if (m = (/^#f/).exec(str)) {
+    return ["sexp", false, str.slice(2)];
+  } else if (m = (/^\(/).exec(str)) {
+    var res = [];
+    var str = str.slice(1);
+    while (true) {
+      var [type, value, rest] = readFromString(str);
+      if (type == "close-paren") {
+        if (res.length > 0)
+          return ["sexp", list.apply(null, res), rest];
+        else
+          return ["sexp", null, rest];
+      } else if (type == 'error' && value == 'empty string') {
+        return ["error", 'unclosed left-parenthesis', rest];
+      } else if (type == 'error') {
+        return [type, value, rest];
+      } else if (type == "dot") {
+        str = rest;
+        [type, value, rest] = readFromString(str);
+        if (type !== "sexp")
+          return ["error", "unexpected token: " + type, rest];
+
+        var cdr = value;
+
+        str = rest;
+        [type, value, rest] = readFromString(str);
+        if (type !== "close-paren") {
+          console.log(value);
+          return ["error", "close-paren expected but got: " + type, rest];
+        }
+
+        value = arrayToImproperList(res, cdr);
+        return ["sexp", value, rest];
+      } else {
+        res.push(value);
+        str = rest;
+      }
+    }
+  } else if (m = (/^\)/).exec(str)) {
+    return ["close-paren", ")", str.slice(1)];
+  } else if (m = (/^;.*(\n|$)/).exec(str)) { // コメントを読み飛ばす。
+    return readFromString(str.slice(m[0].length));
+  } else if (m = (/^[0-9]+\.[0-9]+/).exec(str)) {
+    return ["sexp", parseFloat(m[0]), str.slice(m[0].length)];
+  } else if (m = (/^[0-9]+/).exec(str)) {
+    return ["sexp", parseInt(m[0]), str.slice(m[0].length)];
+  } else if (m = (/^\s+/).exec(str)) {
+    return readFromString(str.slice(m[0].length));
+  } else if (m = (/^"([^"]*)"/).exec(str)) { // バックスラッシュエスケープ実装してない。
+    return ["sexp", eval("\"" + m[1] + "\""), str.slice(m[0].length)];
+  } else if (m = (/^[^\s\(\)]+/).exec(str)) {
+    // 新しいSchemeではケースの正規化をしないようだから、小文字化は
+    // 必要ないか？
+    return ["sexp", intern(m[0]), str.slice(m[0].length)];
+  } else {
+    return ["error", 'parse error', str];
+  }
+}
+
+// console.log(readFromString("(p x)"));
+  // (begin
+  //   (define f (lambda (x) (p x) (f (+ 1 x))))
+  //   (f 0))
+
 window.onload = () => {
   var beepAudio = new Audio('beep.wav');
-  var modalShown = false;
-
-  function showInputModal() {
-    $('#inputModal').modal('show');
-  }
-
-  function showAboutModal() {
-    $('#aboutModal').modal('show');
-  }
-
-  function enterText() {
-    var text = $('#text')[0].value;
-    if (text === '') return;
-
-    transmitter.paste(text);
-    $('#inputModal').modal('hide');
-  }
+  var kbdBuffer = "";
 
   function isctrl(c) {
     var n = c.codePointAt(0);
@@ -33,25 +96,17 @@ window.onload = () => {
   var transmitter;
   var windowFocused = true;
   var fullRedraw = false;
-  var evaluator = new Evaluator({
-    outfn: function (str) {
-      receiver.feed("X:"+str.replace(/\n/g, "\r\n"));
-      fullRedraw = true;
-    }
-  });
+  // var evaluator = new Evaluator({
+  //   outfn: function (str) {
+  //     receiver.feed(str.replace(/\n/, "\r\n"));
+  //   },
+  // });
   var renderer = new Renderer(receiver);
-  var keyboardBuffer = "";
   var interrupted = false;
 
   transmitter = new Transmitter({
     write: function (str) {
-      console.log('transmitter write');
-      keyboardBuffer += str;
-      receiver.feed("Y:"+str);
-      fullRedraw = true;
-      if (evaluator.syscall) {
-        handleSyscall(evaluator);
-      }
+      kbdBuffer += str;
     }
   });
   var render = function () {
@@ -89,27 +144,6 @@ window.onload = () => {
     }
   }
 
-  function handleSyscall(evaluator) {
-    if (!evaluator.syscall) { throw new Error("not syscall'ed"); }
-
-    if (evaluator.syscall[0] === "getchar") {
-      console.log("getchar kbdbuf");
-      console.dir(keyboardBuffer);
-      if (keyboardBuffer.length > 0) {
-        evaluator.syscallEnd(keyboardBuffer[keyboardBuffer.length-1]);
-        console.log(keyboardBuffer[keyboardBuffer.length-1]);
-        console.log(evaluator);
-        keyboardBuffer = keyboardBuffer.slice(0, keyboardBuffer.length-1);
-        setTimeout(loop, 0); // resume
-        return;
-      } else {
-        console.log("getchar blocking");
-      }
-    } else {
-      throw new Error("unknown syscall " + evaluator.syscall[0]);
-    }
-  }
-
   $(document).keyup((e) => {
     if (e.key === "Control" && ctrlJustPressed) {
       if (ctrlLock) {
@@ -140,16 +174,14 @@ window.onload = () => {
       interrupted = true;
     }
 
-    if (!modalShown) {
+    if (true) {
       e.preventDefault();
 
       var scrollAmount = receiver.rows;
       if (e.key === 'PageUp' && e.shiftKey) {
         receiver.scrollBack(scrollAmount);
-        //renderScreen();
       } else if (e.key === 'PageDown' && e.shiftKey){
         receiver.scrollBack(-scrollAmount);
-        //renderScreen();
       } else {
         if (transmitter) {
           if (stickyCtrl) {
@@ -159,111 +191,51 @@ window.onload = () => {
           if (ctrlLock) {
             e.ctrlKey = true;
           }
-          console.log("type in");
           transmitter.typeIn(e);
         }
       }
     }
   });
 
-  $('#input-button').on('click', function () {
-    showInputModal();
-  });
-
-  $('#connect-button').on('click', function () {
-    setup();
-  });
-
-  $('#inputModal').on('shown.bs.modal', function () {
-    modalShown = true;
-    $('#text').focus().val('');
-  });
-
-  $('#inputModal').on('hidden.bs.modal', function () {
-    modalShown = false;
-  });
-
-  $('#aboutModal').on('shown.bs.modal', function () {
-    modalShown = true;
-  });
-
-  $('#aboutModal').on('hidden.bs.modal', function () {
-    modalShown = false;
-  });
-
-  $('#modalInputButton').on('click', enterText);
-
-  $('#version').html('0.0.2');
-
-  $('#progn').on('focus', function () {
-    modalShown = true;
-  }).on('blue', function () {
-    modalShown = false;
-  });
+  var initenv = [
+    [intern("p"), function(val) {
+      var str = (""+val) + "\n";
+      receiver.feed(str.replace(/\n/, "\r\n"));
+      fullRedraw = true
+    }],
+    [intern("print"), function(val) {
+      var str = (""+val);
+      receiver.feed(str.replace(/\n/, "\r\n"));
+      fullRedraw = true
+    }],
+    [intern("+"), function() {
+      var sum = 0;
+      for (var elt of arguments) { sum += elt; }
+      return sum;
+    }],
+  ];
+  // (begin
+  //   (define f (lambda (x) (p x) (f (+ 1 x))))
+  //   (f 0))
+  // var vm = make_vm(list(intern("p"), list(intern("+"), 123, 987)), initenv);
+  var res = readFromString("(begin" +
+                           "(define f (lambda (x) (print \"\\x1b[0;39;46mHOGE\\x1b[0m\") (print x) (f (+ 1 x))))" +
+                           "(f 0))")
+  var vm = make_vm(res[1], initenv);
 
   function loop() {
-    if (interrupted) {
-      // TOOD: evaluator.interrupt()
-      interrupted = false;
-      receiver.feed("Interrupted" + "\r\n");
-      evaluator.value = null;
-      evaluator.evaluating = false;
-      fullRedraw = true;
-      $('#indicator-busy').hide();
-      $('#indicator-idle').show();
-      return;
+    var start = +new Date;
+    while (vm.pc && (+new Date) - start < 16) {
+      vm.step();
     }
 
-    if (evaluator.syscall) {
-      handleSyscall(evaluator);
-      return;
-    }
-
-    if (!evaluator.evaluating) {
-      console.log("eval done");
-      $('#indicator-busy').hide();
-      $('#indicator-idle').show();
-      try {
-        receiver.feed("A:" + JSON.stringify(evaluator.value) + "\r\n");
-      } catch (e) {
-        receiver.feed("B:" + e.message + "\r\n");
-      }
-      fullRedraw = true;
+    if (vm.pc) {
+      window.requestAnimationFrame(loop);
     } else {
-      var t0 = +new Date();
-      do {
-        evaluator.step();
-        if (evaluator.syscall) {
-          handleSyscall(evaluator);
-          return;
-        }
-      } while (evaluator.evaluating && +new Date() - t0 < 16);
-      setTimeout(loop, 0);
+      // 終了(!)
     }
   }
-
-  $('#prognSendButton').on('click', function () {
-    var code = $('#progn')[0].value;
-    var exp;
-
-    try {
-      exp = JSON.parse('["do", ' + code + ']')
-    } catch(e) {
-      alert(e.message);
-      return;
-    }
-
-    if (evaluator.evaluating) {
-      alert("Error: Runtime busy.");
-      return;
-    }
-
-    evaluator.startEval(exp, []);
-    $('#indicator-busy').show();
-    $('#indicator-idle').hide();
-
-    setTimeout(loop, 0);
-  });
+  window.requestAnimationFrame(loop);
 
   window.onblur = function (e) {
     windowFocused = false;
