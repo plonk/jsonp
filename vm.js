@@ -348,7 +348,7 @@ class VM {
   }
 
   unknown_procedure_type() {
-    throw new Error("Unknown procedure type");
+    throw new Error("Unknown procedure type: " + this.proc);
   }
 
   primitive_apply() {
@@ -462,6 +462,31 @@ class VM {
     this.goto(this.continue);
   }
 
+  is_eval(exp) {
+    return (exp instanceof Pair) &&
+      (exp.first === intern("eval"));
+  }
+
+  // eval の呼び出し。
+  ev_eval() {
+    this.save(this.continue)
+    this.continue = this.ev_eval_did_eval_arg;
+    this.exp = this.exp.second.first;
+    this.goto(this.eval_dispatch);
+  }
+  ev_eval_did_eval_arg() {
+    this.continue = this.ev_eval_did_eval;
+    this.save(this.env);
+    this.env = this.interaction_env;
+    this.exp = this.val;
+    this.goto(this.eval_dispatch);
+  }
+  ev_eval_did_eval() {
+    this.env = this.restore();
+    this.continue = this.restore();
+    this.goto(this.continue);
+  }
+
   eval_dispatch() {
     if      (this.is_self_evaluating(this.exp)) this.goto(this.ev_self_eval);
     else if (this.is_variable(this.exp)       ) this.goto(this.ev_variable);
@@ -471,6 +496,7 @@ class VM {
     else if (this.is_if(this.exp)             ) this.goto(this.ev_if);
     else if (this.is_lambda(this.exp)         ) this.goto(this.ev_lambda);
     else if (this.is_begin(this.exp)          ) this.goto(this.ev_begin);
+    else if (this.is_eval(this.exp)           ) this.goto(this.ev_eval);
     else if (this.is_application(this.exp)    ) this.goto(this.ev_application);
     else
       this.goto(this.unknown_expression_type);
@@ -483,21 +509,6 @@ class Procedure {
     this.body = body
     this.env = env
   }
-}
-
-function make_vm(exp, initenv) {
-  var vm = new VM()
-  vm.exp = exp
-
-  var env = new Frame()
-  for (var [key, value] of initenv) {
-    env.define_variable(key, value);
-  }
-
-  vm.env = env;
-  vm.interaction_env = env;
-  vm.pc = vm.eval_dispatch;
-  return vm
 }
 
 // var initenv = [ [intern("p"), console.log] ];

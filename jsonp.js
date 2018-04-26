@@ -18,15 +18,12 @@ function readFromString(str) {
   } else if (m = (/^#f/).exec(str)) {
     return ["sexp", false, str.slice(2)];
   } else if (m = (/^\(/).exec(str)) {
-    var res = [];
+    var res = null;
     var str = str.slice(1);
     while (true) {
       var [type, value, rest] = readFromString(str);
       if (type == "close-paren") {
-        if (res.length > 0)
-          return ["sexp", list.apply(null, res), rest];
-        else
-          return ["sexp", null, rest];
+        return ["sexp", res, rest];
       } else if (type == 'error' && value == 'empty string') {
         return ["error", 'unclosed left-parenthesis', rest];
       } else if (type == 'error') {
@@ -46,10 +43,10 @@ function readFromString(str) {
           return ["error", "close-paren expected but got: " + type, rest];
         }
 
-        value = arrayToImproperList(res, cdr);
-        return ["sexp", value, rest];
+        res.second = cdr;
+        return ["sexp", res, rest];
       } else {
-        res.push(value);
+        res = append(res, list(value));
         str = rest;
       }
     }
@@ -71,6 +68,57 @@ function readFromString(str) {
     return ["sexp", intern(m[0]), str.slice(m[0].length)];
   } else {
     return ["error", 'parse error', str];
+  }
+}
+// console.log(readFromString("(a)"));
+// console.log(readFromString("(a . b)"));
+// console.log(readFromString("(a b)"));
+
+function code_to_sequence(code) {
+  var [type, val, rest] = readFromString(code);
+  if (type === "error") {
+    console.log(val);
+    return null;
+  } else {
+    return cons(val, code_to_sequence(rest));
+  }
+}
+
+function isProperList(pair) {
+  if (pair === null) {
+    return true;
+  } else if (!(pair instanceof Pair)) {
+    return false;
+  } else {
+    return isProperList(pair.second);
+  }
+}
+
+function inspect(val) {
+  if (val === null) {
+    return "()";
+  } else if (val === true) {
+    return "#t";
+  } else if (val === false) {
+    return "#f";
+  } else if (val === undefined) {
+    return "#<undef>";
+  } else if (val instanceof Pair) {
+    if (isProperList(val)) {
+      var str = "(";
+      while (val !== null) {
+        if (str !== "(")
+          str += " ";
+        str += inspect(val.first);
+        val = val.second;
+      }
+      str += ")";
+      return str;
+    } else {
+      return "(" + inspect(val.first) + " . " + inspect(val.second) + ")";
+    }
+  } else {
+    return "" + val; // stringify in the JavaScript way
   }
 }
 
@@ -284,13 +332,12 @@ window.onload = () => {
       fullRedraw = true
     }],
     [intern("print"), function(val) {
-      console.log(val);
       var str = (""+val);
       receiver.feed(str.replace(/\n/, "\r\n"));
       fullRedraw = true
     }],
     [intern("display"), function(val) {
-      var str = (""+val);
+      var str = inspect(val);
       for (var ch of str)
         ttyOutputPort.writeChar(ch);
     }],
@@ -328,52 +375,44 @@ window.onload = () => {
       return res[1];
     }],
   ];
-  // (begin
-  //   (define f (lambda (x) (p x) (f (+ 1 x))))
-  //   (f 0))
-  // var vm = make_vm(list(intern("p"), list(intern("+"), 123, 987)), initenv);
-  // var res = readFromString("(begin" +
-  //                          "(define f (lambda (x) (print \"\\x1b[0;39;46mHOGE\\x1b[0m\") (print x) (f (+ 1 x))))" +
-  //                          "(f 0))")
-  // var res = readFromString("(progn "+
-  //                          "(define f (lambda () (print (str \"\\x1b[38;5;\" (+ 232 (random 24)) \";48;5;\" (+ 232 (random 24)) \"m\")) (print 'A) (print \"\\x1b\[0m\") (f)))" +
-  //                          ""+
-  //                          "(f))")
-  // var code = "(begin " +
-  //            "  (define read-line " +
-  //            "    (lambda () " +
-  //            "      (define line \"\") " +
-  //            "      (define iter " +
-  //            "        (lambda () " +
-  //            "          (define ch (getch)) " +
-  //            "          (if (null? ch) (begin (iter)) (if (eq ch \"\\x0d\") " +
-  //            "              (begin (print \"\\x0d\\x0a\") line) " +
-  //            "            (begin " +
-  //            "              (print ch) " + // エコーバック
-  //            "              (set! line (str line ch)) " +
-  //            "              (iter)))))) " +
-  //            "      (iter))) " +
-  //            "   (print (read-line))) ";
+  // read-print ループ
+  // var code = "(begin" +
+  //            "  (define iter" +
+  //            "    (lambda ()" +
+  //            "      (display (read-from-string (read-line (current-input-port))))" +
+  //            "      (newline)" +
+  //            "      (iter)))" +
+  //            "  (iter))";
   var code = "(begin" +
-             "  (define read-char (lambda (port)" +
-             "       (if (char-ready? port)" +
-             "           (begin (read-char-nonblock port))" +
-             "           (begin (read-char port)))))" +
-             "  (define read-line (lambda (port)" +
-             "    (define ch (read-char port))" +
-             "    (write-char ch (current-output-port))" +
-             "    (if (eq ch \"\\x0a\")" +
-             "       \"\"" +
-             "       (str ch (read-line port)))))" +
              "  (define iter" +
              "    (lambda ()" +
-             "      (display (read-from-string (read-line (current-input-port))))" +
+             "      (display \"* \")" +
+             "      (display (eval (read-from-string (read-line (current-input-port)))))" +
              "      (newline)" +
              "      (iter)))" +
              "  (iter))";
-  var res = readFromString(code);
+  var res;
 
-  var vm = make_vm(res[1], initenv);
+  var vm = new VM()
+
+  var env = new Frame()
+  for (var [key, value] of initenv) {
+    env.define_variable(key, value);
+  }
+
+  vm.env = env;
+  vm.interaction_env = env;
+
+  var seq = code_to_sequence($ASSETS["startup.scm"]);
+  vm.exp = cons(intern("begin"), seq);
+
+  vm.pc = vm.eval_dispatch;
+  while (vm.pc)
+    vm.step();
+
+  res = readFromString(code);
+  vm.exp = res[1];
+  vm.pc = vm.eval_dispatch;
 
   function loop() {
     // 16ms VMを動かす。単純なループカウントで上限を設定して、アダプティ
