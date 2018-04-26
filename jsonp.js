@@ -74,11 +74,6 @@ function readFromString(str) {
   }
 }
 
-// console.log(readFromString("(p x)"));
-  // (begin
-  //   (define f (lambda (x) (p x) (f (+ 1 x))))
-  //   (f 0))
-
 window.onload = () => {
   var beepAudio = new Audio('beep.wav');
   var kbdBuffer = "";
@@ -96,19 +91,27 @@ window.onload = () => {
   var transmitter;
   var windowFocused = true;
   var fullRedraw = false;
-  // var evaluator = new Evaluator({
-  //   outfn: function (str) {
-  //     receiver.feed(str.replace(/\n/, "\r\n"));
-  //   },
-  // });
   var renderer = new Renderer(receiver);
   var interrupted = false;
+
+  function updateBusyIndicator() {
+    if (interrupted) {
+      $('#indicator-busy').hide();
+      $('#indicator-idle').show();
+    } else {
+      $('#indicator-busy').show();
+      $('#indicator-idle').hide();
+    }
+  }
 
   transmitter = new Transmitter({
     write: function (str) {
       kbdBuffer += str;
     }
   });
+
+  // fullRedraw の場合は文字画面とオーバーレイ画面の両方が再描画される。
+  // 何も文字バッファーに変更がなければ fullRedraw は false。
   var render = function () {
     renderer.render(fullRedraw, windowFocused)
     fullRedraw = false;
@@ -171,7 +174,8 @@ window.onload = () => {
 
     if (e.key === 'Pause') {
       e.preventDefault();
-      interrupted = true;
+      interrupted = !interrupted;
+      updateBusyIndicator();
     }
 
     if (true) {
@@ -197,35 +201,185 @@ window.onload = () => {
     }
   });
 
+  class TtyInputPort {
+    isInputPort() { return true; }
+    isOutputPort() { return false; }
+    readChar() {
+      if (!this.isCharReady())
+        throw new Error("readChar: char not ready");
+
+      var ch = kbdBuffer[0];
+      if (ch === "\x0d")
+        ch = "\x0a";
+      kbdBuffer = kbdBuffer.slice(2);
+      return ch;
+    }
+    peekChar() {
+      if (!this.isCharReady())
+        throw new Error("peekChar: char not ready");
+
+      return kbdBuffer[0];
+    }
+    isCharReady() {
+      return kbdBuffer.length > 0;
+    }
+  }
+  var ttyInputPort = new TtyInputPort;
+
+  class TtyOutputPort {
+    isInputPort() { return false; }
+    isOutputPort() { return true; }
+    writeChar(ch) {
+      if (ch === "\x0a") { // CR
+        receiver.feed("\x0d\x0a"); // CR+LF
+      } else {
+        receiver.feed(ch);
+      }
+      fullRedraw = true
+    }
+  }
+  var ttyOutputPort = new TtyOutputPort;
+
   var initenv = [
+    [intern("current-input-port"), function () {
+      return ttyInputPort;
+    }],
+    [intern("current-output-port"), function () {
+      return ttyOutputPort;
+    }],
+    [intern("input-port?"), function (port) {
+      return port.isInputPort();
+    }],
+    [intern("char-ready?"), function (port) {
+      port = port || ttyInputPort;
+      return port.isCharReady();
+    }],
+    [intern("read-char-nonblock"), function (port) {
+      port = port || ttyInputPort;
+      if (port.isCharReady()) {
+        return port.readChar();
+      } else {
+        return null;
+      }
+    }],
+    [intern("write-char"), function () {
+      var ch = arguments[0];
+      var port = arguments[1] || ttyOutputPort;
+
+      port.writeChar(ch);
+      return intern("ok");
+    }],
+    [intern("newline"), function (port) {
+      port = port || ttyOutputPort;
+
+      port.writeChar("\x0d");
+      port.writeChar("\x0a");
+      return intern("ok");
+    }],
+    [intern("car"), function(pair) { return pair.first;  }],
+    [intern("cdr"), function(pair) { return pair.second;  }],
     [intern("p"), function(val) {
       var str = (""+val) + "\n";
       receiver.feed(str.replace(/\n/, "\r\n"));
       fullRedraw = true
     }],
     [intern("print"), function(val) {
+      console.log(val);
       var str = (""+val);
       receiver.feed(str.replace(/\n/, "\r\n"));
       fullRedraw = true
+    }],
+    [intern("display"), function(val) {
+      var str = (""+val);
+      for (var ch of str)
+        ttyOutputPort.writeChar(ch);
     }],
     [intern("+"), function() {
       var sum = 0;
       for (var elt of arguments) { sum += elt; }
       return sum;
     }],
+    [intern("str"), function() {
+      var sum = "";
+      for (var elt of arguments) { sum += elt; }
+      return sum;
+    }],
+    [intern("getch"), function() {
+      if (kbdBuffer.length > 0) {
+        var res = kbdBuffer[0];
+        kbdBuffer = kbdBuffer.slice(1);
+        return res;
+      } else {
+        return null;
+      }
+    }],
+    [intern("null?"), function(v) {
+      return (v === null);
+    }],
+    [intern("random"), function(n) {
+      return Math.floor(Math.random() * n);
+    }],
+    [intern("eq"), function(a, b) {
+      return a === b;
+    }],
+    [intern("read-from-string"), function(str) {
+      var res = readFromString(str);
+      console.log(res);
+      return res[1];
+    }],
   ];
   // (begin
   //   (define f (lambda (x) (p x) (f (+ 1 x))))
   //   (f 0))
   // var vm = make_vm(list(intern("p"), list(intern("+"), 123, 987)), initenv);
-  var res = readFromString("(begin" +
-                           "(define f (lambda (x) (print \"\\x1b[0;39;46mHOGE\\x1b[0m\") (print x) (f (+ 1 x))))" +
-                           "(f 0))")
+  // var res = readFromString("(begin" +
+  //                          "(define f (lambda (x) (print \"\\x1b[0;39;46mHOGE\\x1b[0m\") (print x) (f (+ 1 x))))" +
+  //                          "(f 0))")
+  // var res = readFromString("(progn "+
+  //                          "(define f (lambda () (print (str \"\\x1b[38;5;\" (+ 232 (random 24)) \";48;5;\" (+ 232 (random 24)) \"m\")) (print 'A) (print \"\\x1b\[0m\") (f)))" +
+  //                          ""+
+  //                          "(f))")
+  // var code = "(begin " +
+  //            "  (define read-line " +
+  //            "    (lambda () " +
+  //            "      (define line \"\") " +
+  //            "      (define iter " +
+  //            "        (lambda () " +
+  //            "          (define ch (getch)) " +
+  //            "          (if (null? ch) (begin (iter)) (if (eq ch \"\\x0d\") " +
+  //            "              (begin (print \"\\x0d\\x0a\") line) " +
+  //            "            (begin " +
+  //            "              (print ch) " + // エコーバック
+  //            "              (set! line (str line ch)) " +
+  //            "              (iter)))))) " +
+  //            "      (iter))) " +
+  //            "   (print (read-line))) ";
+  var code = "(begin" +
+             "  (define read-char (lambda (port)" +
+             "       (if (char-ready? port)" +
+             "           (begin (read-char-nonblock port))" +
+             "           (begin (read-char port)))))" +
+             "  (define read-line (lambda (port)" +
+             "    (define ch (read-char port))" +
+             "    (write-char ch (current-output-port))" +
+             "    (if (eq ch \"\\x0a\")" +
+             "       \"\"" +
+             "       (str ch (read-line port)))))" +
+             "  (define iter" +
+             "    (lambda ()" +
+             "      (display (read-from-string (read-line (current-input-port))))" +
+             "      (newline)" +
+             "      (iter)))" +
+             "  (iter))";
+  var res = readFromString(code);
+
   var vm = make_vm(res[1], initenv);
 
   function loop() {
+    // 16ms VMを動かす。単純なループカウントで上限を設定して、アダプティ
+    // ブに実時間に合わせて回数を調整したほうが効率的な気がする。
     var start = +new Date;
-    while (vm.pc && (+new Date) - start < 16) {
+    while (!interrupted && vm.pc && (+new Date) - start < 16) {
       vm.step();
     }
 
@@ -233,6 +387,8 @@ window.onload = () => {
       window.requestAnimationFrame(loop);
     } else {
       // 終了(!)
+      interrupted = true;
+      updateBusyIndicator();
     }
   }
   window.requestAnimationFrame(loop);
@@ -246,4 +402,6 @@ window.onload = () => {
     windowFocused = true;
     fullRedraw = true;
   };
+
+  updateBusyIndicator();
 };

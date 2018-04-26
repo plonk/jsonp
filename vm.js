@@ -7,6 +7,10 @@ class Symbol {
 
     this.name = name;
   }
+
+  toString() {
+    return this.name;
+  }
 }
 
 function intern(name) {
@@ -105,6 +109,10 @@ class Pair {
     this.first = first;
     this.second = second;
   }
+
+  toString() {
+    return "(" + this.first + " . " + this.second + ")";
+  }
 }
 
 var p = new Pair(1, 2);
@@ -155,6 +163,8 @@ class VM {
     this.stack = [];
     this.continue = null;
     this.proc = null;
+
+    this.interaction_env = undefined;
   }
 
   save(v) {
@@ -313,9 +323,14 @@ class VM {
     var params = this.proc.params;
     var args = this.argl;
     while (params !== null) {
-      frame.define_variable(params.first, args.first);
-      params = params.second;
-      args = args.second;
+      if (params instanceof Pair) {
+        frame.define_variable(params.first, args.first);
+        params = params.second;
+        args = args.second;
+      } else {
+        frame.define_variable(params, args);
+        break;
+      }
     }
 
     this.unev = this.proc.body
@@ -395,6 +410,58 @@ class VM {
     this.goto(this.continue);
   }
 
+  ev_quoted() {
+    this.val = this.exp.second.first;
+    this.goto(this.continue);
+  }
+
+  is_true(v) {
+    return v === true;
+  }
+
+  ev_if() {
+    this.save(this.continue);
+    this.continue = this.ev_if_did_test;
+    this.save(this.exp);
+    this.exp = this.exp.second.first;
+    this.goto(this.eval_dispatch);
+  }
+
+  ev_if_did_test() {
+    this.exp = this.restore();
+    this.continue = this.restore();
+
+    if (this.is_true(this.val)) {
+      this.exp = this.exp.second.second.first;
+      this.goto(this.eval_dispatch);
+    } else {
+      if (this.exp.second.second.second === null) { // else節がない。
+        this.val = null;
+        this.goto(this.continue);
+      } else {
+        this.exp = this.exp.second.second.second.first;
+        this.goto(this.eval_dispatch);
+      }
+    }
+  }
+
+  ev_assignment() {
+    var name = this.exp.second.first;
+    this.save(name);
+    this.save(this.continue);
+    this.exp = this.exp.second.second.first;
+    this.continue = this.ev_assignment_did_eval;
+    this.goto(this.eval_dispatch);
+  }
+
+  ev_assignment_did_eval() {
+    this.continue = this.restore();
+    var name = this.restore();
+    this.env.assign_variable(name, this.val);
+    this.val = intern("ok");
+    this.goto(this.continue);
+  }
+
   eval_dispatch() {
     if      (this.is_self_evaluating(this.exp)) this.goto(this.ev_self_eval);
     else if (this.is_variable(this.exp)       ) this.goto(this.ev_variable);
@@ -427,7 +494,8 @@ function make_vm(exp, initenv) {
     env.define_variable(key, value);
   }
 
-  vm.env = env
+  vm.env = env;
+  vm.interaction_env = env;
   vm.pc = vm.eval_dispatch;
   return vm
 }
