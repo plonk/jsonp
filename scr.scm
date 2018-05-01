@@ -1,0 +1,5 @@
+(define (iter)
+  (display (str "\x1b" "[" 48 ";" 2 ";" (random 256) ";" (random 256) ";" (random 256) "m"))
+  (display " ")
+  (iter))
+(iter)

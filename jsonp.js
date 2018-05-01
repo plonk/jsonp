@@ -43,7 +43,10 @@ function readFromString(str) {
           return ["error", "close-paren expected but got: " + type, rest];
         }
 
-        res.second = cdr;
+        var lastcdr = res;
+        while (lastcdr.second !== null)
+          lastcdr = lastcdr.second; // go to last cdr
+        lastcdr.second = cdr;
         return ["sexp", res, rest];
       } else {
         res = append(res, list(value));
@@ -54,9 +57,9 @@ function readFromString(str) {
     return ["close-paren", ")", str.slice(1)];
   } else if (m = (/^;.*(\n|$)/).exec(str)) { // コメントを読み飛ばす。
     return readFromString(str.slice(m[0].length));
-  } else if (m = (/^[0-9]+\.[0-9]+/).exec(str)) {
+  } else if (m = (/^-?[0-9]+\.[0-9]+/).exec(str)) {
     return ["sexp", parseFloat(m[0]), str.slice(m[0].length)];
-  } else if (m = (/^[0-9]+/).exec(str)) {
+  } else if (m = (/^-?[0-9]+/).exec(str)) {
     return ["sexp", parseInt(m[0]), str.slice(m[0].length)];
   } else if (m = (/^\s+/).exec(str)) {
     return readFromString(str.slice(m[0].length));
@@ -126,6 +129,27 @@ window.onload = () => {
   var beepAudio = new Audio('beep.wav');
   var kbdBuffer = "";
 
+  var print = function (val) {
+    var str = inspect(val);
+    for (var ch of str)
+      ttyOutputPort.writeChar(ch);
+    ttyOutputPort.writeChar("\n");
+  };
+  var display = function(val) {
+    var str = inspect(val);
+    for (var ch of str)
+      ttyOutputPort.writeChar(ch);
+  };
+
+  function dumpFrames(frame) {
+    var i = 0;
+    while (frame) {
+      display(i++ + ": ");
+      print(frame.name);
+      frame = frame.parent;
+    }
+  }
+
   function isctrl(c) {
     var n = c.codePointAt(0);
     return (n <= 31);
@@ -134,6 +158,9 @@ window.onload = () => {
   var receiver = new Receiver(80, 24, {
     cursorKeyMode: function (mode) {
       transmitter.cursorKeyMode = mode;
+    },
+    beep: function() {
+      beepAudio.play();
     },
   });
   var transmitter;
@@ -222,8 +249,8 @@ window.onload = () => {
 
     if (e.key === 'Pause') {
       e.preventDefault();
-      interrupted = !interrupted;
-      updateBusyIndicator();
+      interrupted = true;
+      // updateBusyIndicator();
     }
 
     if (true) {
@@ -288,147 +315,202 @@ window.onload = () => {
   }
   var ttyOutputPort = new TtyOutputPort;
 
-  var initenv = [
-    [intern("current-input-port"), function () {
-      return ttyInputPort;
-    }],
-    [intern("current-output-port"), function () {
-      return ttyOutputPort;
-    }],
-    [intern("input-port?"), function (port) {
-      return port.isInputPort();
-    }],
-    [intern("char-ready?"), function (port) {
-      port = port || ttyInputPort;
-      return port.isCharReady();
-    }],
-    [intern("read-char-nonblock"), function (port) {
-      port = port || ttyInputPort;
-      if (port.isCharReady()) {
-        return port.readChar();
-      } else {
-        return null;
-      }
-    }],
-    [intern("write-char"), function () {
-      var ch = arguments[0];
-      var port = arguments[1] || ttyOutputPort;
+  function makeInitenv(vm) {
+    var initenv = [
+      [intern("current-input-port"), function () {
+        return ttyInputPort;
+      }],
+      [intern("current-output-port"), function () {
+        return ttyOutputPort;
+      }],
+      [intern("input-port?"), function (port) {
+        return port.isInputPort();
+      }],
+      [intern("char-ready?"), function (port) {
+        port = port || ttyInputPort;
+        return port.isCharReady();
+      }],
+      [intern("read-char-nonblock"), function (port) {
+        port = port || ttyInputPort;
+        if (port.isCharReady()) {
+          return port.readChar();
+        } else {
+          return null;
+        }
+      }],
+      [intern("write-char"), function () {
+        var ch = arguments[0];
+        var port = arguments[1] || ttyOutputPort;
 
-      port.writeChar(ch);
-      return intern("ok");
-    }],
-    [intern("newline"), function (port) {
-      port = port || ttyOutputPort;
+        port.writeChar(ch);
+        return intern("ok");
+      }],
+      [intern("newline"), function (port) {
+        port = port || ttyOutputPort;
 
-      port.writeChar("\x0d");
-      port.writeChar("\x0a");
-      return intern("ok");
-    }],
-    [intern("car"), function(pair) { return pair.first;  }],
-    [intern("cdr"), function(pair) { return pair.second;  }],
-    [intern("p"), function(val) {
-      var str = (""+val) + "\n";
-      receiver.feed(str.replace(/\n/, "\r\n"));
-      fullRedraw = true
-    }],
-    [intern("print"), function(val) {
-      var str = (""+val);
-      receiver.feed(str.replace(/\n/, "\r\n"));
-      fullRedraw = true
-    }],
-    [intern("display"), function(val) {
-      var str = inspect(val);
-      for (var ch of str)
-        ttyOutputPort.writeChar(ch);
-    }],
-    [intern("+"), function() {
-      var sum = 0;
-      for (var elt of arguments) { sum += elt; }
-      return sum;
-    }],
-    [intern("str"), function() {
-      var sum = "";
-      for (var elt of arguments) { sum += elt; }
-      return sum;
-    }],
-    [intern("getch"), function() {
-      if (kbdBuffer.length > 0) {
-        var res = kbdBuffer[0];
-        kbdBuffer = kbdBuffer.slice(1);
-        return res;
-      } else {
-        return null;
-      }
-    }],
-    [intern("null?"), function(v) {
-      return (v === null);
-    }],
-    [intern("random"), function(n) {
-      return Math.floor(Math.random() * n);
-    }],
-    [intern("eq"), function(a, b) {
-      return a === b;
-    }],
-    [intern("read-from-string"), function(str) {
-      var res = readFromString(str);
-      console.log(res);
-      return res[1];
-    }],
-  ];
-  // read-print ループ
-  // var code = "(begin" +
-  //            "  (define iter" +
-  //            "    (lambda ()" +
-  //            "      (display (read-from-string (read-line (current-input-port))))" +
-  //            "      (newline)" +
-  //            "      (iter)))" +
-  //            "  (iter))";
-  var code = "(begin" +
-             "  (define iter" +
-             "    (lambda ()" +
-             "      (display \"* \")" +
-             "      (display (eval (read-from-string (read-line (current-input-port)))))" +
-             "      (newline)" +
-             "      (iter)))" +
-             "  (iter))";
-  var res;
-
-  var vm = new VM()
-
-  var env = new Frame()
-  for (var [key, value] of initenv) {
-    env.define_variable(key, value);
+        port.writeChar("\x0d");
+        port.writeChar("\x0a");
+        return intern("ok");
+      }],
+      [intern("car"), function(pair) { return pair.first;  }],
+      [intern("cdr"), function(pair) { return pair.second;  }],
+      [intern("p"), function(val) {
+        var str = (""+val) + "\n";
+        receiver.feed(str.replace(/\n/, "\r\n"));
+        fullRedraw = true
+      }],
+      [intern("print"), print],
+      [intern("display"), display],
+      [intern("+"), function() {
+        var sum = 0;
+        for (var elt of arguments) { sum += elt; }
+        return sum;
+      }],
+      [intern("str"), function() {
+        var sum = "";
+        for (var elt of arguments) { sum += elt; }
+        return sum;
+      }],
+      [intern("getch"), function() {
+        if (kbdBuffer.length > 0) {
+          var res = kbdBuffer[0];
+          kbdBuffer = kbdBuffer.slice(1);
+          return res;
+        } else {
+          return null;
+        }
+      }],
+      [intern("null?"), function(v) {
+        return (v === null);
+      }],
+      [intern("random"), function(n) {
+        return Math.floor(Math.random() * n);
+      }],
+      [intern("eq?"), function(a, b) {
+        return a === b;
+      }],
+      [intern("read-from-string"), function(str) {
+        var res = readFromString(str);
+        console.log(res);
+        return res[1];
+      }],
+      [intern("undefined"), function(str) {
+        return undefined;
+      }],
+      [intern("spawn"), spawnProgram],
+      [intern("exit"), function () {
+        vms.pop();
+      }],
+      [intern("list"), list],
+      [intern("sys-list-files"), function () {
+        return list.apply(null, Object.keys($ASSETS));
+      }],
+      [intern("sys-get-file-contents"), function (filename) {
+        return $ASSETS[filename];
+      }],
+      [intern("split"), function (exp, str) {
+        var r = new RegExp(exp);
+        return list.apply(null, str.split(r));
+      }],
+      [intern("cons"), cons],
+      [intern("append"), append],
+      [intern("symbol?"), function (v) { return v instanceof Symbol; }],
+      [intern("symbol->string"), function (sym) { return sym.name; }],
+      [intern("string?"), function (v) { return typeof(v) === "string"; }],
+      [intern("string-length"), function(s) { return s.length; }],
+      [intern("substring"), function(s, start, end) { return s.substr(start, end); }],
+      [intern("string-append"), function() { return Array.from(arguments).join(""); }],
+      [intern("wcwidth"), wcwidth],
+      [intern("string-ref"), function (s, k) { return s[k]; }],
+      [intern("eof-object"), function() { return new EndOfFile; }],
+      [intern("eof-object?"), function(v) { return v instanceof EndOfFile; }],
+      [intern("negate"), function (v) { return -v; }],
+      [intern("number->string"), function (n) { return ""+n; }],
+      [intern("<"), function (a, b) { return a < b; }],
+      [intern(">"), function (a, b) { return a > b; }],
+      [intern("<="), function (a, b) { return a <= b; }],
+      [intern(">="), function (a, b) { return a >= b; }],
+      [intern("string->symbol"), intern],
+    ];
+    return initenv;
   }
 
-  vm.env = env;
-  vm.interaction_env = env;
+  function loadProgram(filename, argv) {
+    var vm = new VM()
+    var initenv = makeInitenv(vm);
 
-  var seq = code_to_sequence($ASSETS["startup.scm"]);
-  vm.exp = cons(intern("begin"), seq);
+    var env = new Frame()
+    env.name = 'top level';
+    for (var [key, value] of initenv) {
+      env.define_variable(key, value);
+    }
+    env.define_variable(intern("*argv*"), argv);
 
-  vm.pc = vm.eval_dispatch;
-  while (vm.pc)
-    vm.step();
+    vm.env = env;
+    vm.interaction_env = env;
 
-  res = readFromString(code);
-  vm.exp = res[1];
-  vm.pc = vm.eval_dispatch;
+    var seq = code_to_sequence($ASSETS["startup.scm"]);
+    vm.exp = cons(intern("begin"), seq);
+
+    vm.pc = vm.eval_dispatch;
+    while (vm.pc)
+      vm.step();
+
+    var code = code_to_sequence($ASSETS[filename]);
+    vm.exp = cons(intern("begin"), code);
+    vm.pc = vm.eval_dispatch;
+
+    return vm;
+  }
+  var res;
+
+  var vms = [];
+
+  function spawnProgram(filename) {
+    if ($ASSETS[filename] === undefined) {
+      return intern("no-such-file");
+    } else {
+      var argv = list.apply(null, Array.from(arguments).slice(1));
+      vms.push(loadProgram(filename, argv));
+      return intern("ok");
+    }
+  }
+
+  spawnProgram("init.scm");
+
+  var ALLOCATED_TIME_MSEC = 8;
 
   function loop() {
-    // 16ms VMを動かす。単純なループカウントで上限を設定して、アダプティ
-    // ブに実時間に合わせて回数を調整したほうが効率的な気がする。
     var start = +new Date;
-    while (!interrupted && vm.pc && (+new Date) - start < 16) {
-      vm.step();
+
+    while (vms.length > 0) {
+      var vm = vms[vms.length - 1];
+      if (!vm.pc) {
+        vms.pop();
+      } else if (interrupted) {
+        print("Interrupt");
+        vms.pop();
+        interrupted = false;
+      } else {
+        try {
+          vm.step();
+        } catch (e) {
+          console.log(e);
+          var str = inspect(e);
+          for (var ch of str)
+            ttyOutputPort.writeChar(ch);
+          ttyOutputPort.writeChar("\n");
+          dumpFrames(vm.env);
+          var c = vm.env.lookup_variable(intern('*resume-from-error*'));
+          vm.restore_from_continuation(c);
+        }
+      }
+
+      if ((+new Date) - start >= ALLOCATED_TIME_MSEC)
+        break;
     }
 
-    if (vm.pc) {
-      window.requestAnimationFrame(loop);
-    } else {
-      // 終了(!)
-      interrupted = true;
-      updateBusyIndicator();
-    }
+    window.requestAnimationFrame(loop);
   }
   window.requestAnimationFrame(loop);
 

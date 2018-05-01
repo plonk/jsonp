@@ -1,0 +1,6 @@
+(define (keep-shell-running)
+  (print "Init: Restarting Shell ...")
+  (spawn "shell.scm")
+  (keep-shell-running))
+(spawn "shell.scm")
+(keep-shell-running)

@@ -1,5 +1,11 @@
 $SYMBOLS = {};
 
+class EndOfFile {
+  toString() {
+    return "#<eof>";
+  }
+}
+
 class Symbol {
   constructor(name) {
     if ($SYMBOLS.hasOwnProperty(name))
@@ -61,22 +67,25 @@ class AssocList {
 }
 
 var a = new AssocList();
+console.log(a.hasKey(intern("x")));
 a.put(intern("x"), 123);
+console.log(a.hasKey(intern("x")));
 console.log(a.lookupValue(intern("x")));
 
 class Frame {
   constructor(parent) {
     this.bindings = new AssocList();
     this.parent = parent;
+    this.name = undefined;
   }
 
   lookup_variable(name) {
-    if (this.bindings.hasKey(name))
+    if (this.bindings.hasKey(name)) {
       return this.bindings.lookupValue(name);
-    else if (this.parent)
+    } else if (this.parent) {
       return this.parent.lookup_variable(name);
-    else
-      new Error(`no such variable ${name}`);
+    } else
+      throw new Error(`lookup_variable: no such variable ${name}`);
   }
 
   assign_variable(name, value) {
@@ -85,7 +94,7 @@ class Frame {
     else if (this.parent)
       this.parent.assign_variable(name, value);
     else
-      throw new Error(`no such variable ${name}`);
+      throw new Error(`assign_variable: no such variable ${name}`);
   }
 
   define_variable(name, value) {
@@ -97,6 +106,7 @@ class Frame {
 }
 
 var f = new Frame();
+//console.log(f.lookup_variable(intern("x")));
 f.define_variable(intern("x"), 999);
 console.log(f.lookup_variable(intern("x")));
 var g = new Frame(f);
@@ -115,11 +125,19 @@ class Pair {
   }
 }
 
-var p = new Pair(1, 2);
-console.log(p.second);
+// var p = new Pair(1, 2);
+// console.log(p.second);
 
 function cons(car, cdr) {
   return new Pair(car, cdr);
+}
+
+function car(pair) {
+  return pair.first;
+}
+
+function cdr(pair) {
+  return pair.second;
 }
 
 function list() {
@@ -132,8 +150,8 @@ function list() {
   return res;
 }
 
-console.log(list(1, 2, 3));
-console.log(list(intern("p"), 1));
+// console.log(list(1, 2, 3));
+// console.log(list(intern("p"), 1));
 
 function append(xs, ys) {
   if (xs === null) {
@@ -143,6 +161,26 @@ function append(xs, ys) {
   }
 }
 
+function map(f, xs) {
+  if (xs === null) {
+    return null;
+  } else {
+    return cons(f(xs.first), map(f, xs.second));
+  }
+}
+console.log(map(function(x) { return x+1; }, list(1,2,3)));
+
+function transpose(lls) {
+  if (lls === null) {
+    return null;
+  } else if (lls.first === null) {
+    return null;
+  } else {
+    return cons(map(car, lls), transpose(map(cdr, lls)));
+  }
+}
+console.log(transpose(list(list(1, 10), list(2, 20))));
+
 function array(ls) {
   var res = [];
   while (ls !== null) {
@@ -150,6 +188,12 @@ function array(ls) {
     ls = ls.second;
   }
   return res;
+}
+
+class Continuation {
+  constructor(data) {
+    this.data = data;
+  }
 }
 
 class VM {
@@ -165,6 +209,24 @@ class VM {
     this.proc = null;
 
     this.interaction_env = undefined;
+  }
+
+  make_continuation() {
+    var c = new Continuation({
+      pc: this.pc,
+      exp: this.exp,
+      env: this.env,
+      argl: this.argl,
+      unev: this.unev,
+      stack: Array.from(this.stack),
+      continue: this.continue,
+      proc: this.proc,
+      interaction_env: this.interaction_env,
+    });
+
+    console.log("MAKE CONT");
+    console.log(c);
+    return c;
   }
 
   save(v) {
@@ -320,6 +382,7 @@ class VM {
 
   compound_apply() {
     var frame = new Frame(this.proc.env)
+    frame.name = this.proc.toString();
     var params = this.proc.params;
     var args = this.argl;
     while (params !== null) {
@@ -338,11 +401,41 @@ class VM {
     this.goto(this.ev_sequence);
   }
 
+  restore_from_continuation(cont) {
+    console.log("RESTORE CONT");
+    console.log(cont);
+    var data = cont.data;
+    this.pc              = data.pc;
+    this.exp             = data.exp;
+    this.env             = data.env;
+    this.argl            = data.argl;
+    this.unev            = data.unev;
+    // this.stack           = data.stack;
+    this.stack           = Array.from(data.stack);
+    this.continue        = data.continue;
+    this.proc            = data.proc;
+    this.interaction_env = data.interaction_env;
+  }
+
+  continuation_apply() {
+    console.log("CONTINUATION APPLY");
+    this.val = this.argl.first;
+
+    this.restore_from_continuation(this.proc);
+    this.goto(this.continue);
+  }
+
+  is_continuation(val) {
+    return val instanceof Continuation;
+  }
+
   apply_dispatch() {
     if (this.is_primitive_procedure(this.proc))
       this.goto(this.primitive_apply);
     else if (this.is_compound_procedure(this.proc))
       this.goto(this.compound_apply);
+    else if (this.is_continuation(this.proc))
+      this.goto(this.continuation_apply);
     else
       this.goto(this.unknown_procedure_type);
   }
@@ -393,12 +486,23 @@ class VM {
   }
 
   ev_definition() {
-    this.save(this.exp.second.first)
-    this.exp = this.exp.second.second.first
-    this.save(this.env)
-    this.save(this.continue)
-    this.continue = this.ev_definition_1
-    this.goto(this.eval_dispatch);
+    if (this.exp.second.first instanceof Symbol) {
+      this.save(this.exp.second.first) // name
+      this.exp = this.exp.second.second.first
+      this.save(this.env)
+      this.save(this.continue)
+      this.continue = this.ev_definition_1
+      this.goto(this.eval_dispatch);
+    } else if (this.exp.second.first instanceof Pair) { // procedure definition
+      this.save(this.exp.second.first.first); // name
+      this.exp = cons(intern("lambda"), cons(this.exp.second.first.second, this.exp.second.second));
+      this.save(this.env);
+      this.save(this.continue);
+      this.continue = this.ev_definition_2;
+      this.goto(this.eval_dispatch);
+    } else {
+      throw new Error("ill-formed define")
+    }
   }
 
   ev_definition_1() {
@@ -410,24 +514,36 @@ class VM {
     this.goto(this.continue);
   }
 
+  ev_definition_2() {
+    this.continue = this.restore()
+    this.env = this.restore()
+    var name = this.restore()
+    this.val.name = name.name;
+    this.env.define_variable(name, this.val)
+    this.val = intern("ok")
+    this.goto(this.continue);
+  }
+
   ev_quoted() {
     this.val = this.exp.second.first;
     this.goto(this.continue);
   }
 
   is_true(v) {
-    return v === true;
+    return v !== false;
   }
 
   ev_if() {
     this.save(this.continue);
     this.continue = this.ev_if_did_test;
     this.save(this.exp);
+    this.save(this.env);
     this.exp = this.exp.second.first;
     this.goto(this.eval_dispatch);
   }
 
   ev_if_did_test() {
+    this.env = this.restore();
     this.exp = this.restore();
     this.continue = this.restore();
 
@@ -448,6 +564,7 @@ class VM {
   ev_assignment() {
     var name = this.exp.second.first;
     this.save(name);
+    this.save(this.env);
     this.save(this.continue);
     this.exp = this.exp.second.second.first;
     this.continue = this.ev_assignment_did_eval;
@@ -456,6 +573,7 @@ class VM {
 
   ev_assignment_did_eval() {
     this.continue = this.restore();
+    this.env = this.restore();
     var name = this.restore();
     this.env.assign_variable(name, this.val);
     this.val = intern("ok");
@@ -487,8 +605,37 @@ class VM {
     this.goto(this.continue);
   }
 
+  is_make_cont(exp) {
+    return (exp instanceof Pair) &&
+      exp.first === intern("make-continuation");
+  }
+
+  ev_make_cont() {
+    this.val = this.make_continuation();
+    this.goto(this.continue);
+  }
+
+  is_let(exp) {
+    return (exp instanceof Pair) &&
+      exp.first === intern("let");
+  }
+
+  ev_let() {
+    // (let ((a x) (b y) (c z)) BODY)
+    // ((lambda (a b c) BODY) x y z)
+    var ls = transpose(this.exp.second.first);
+    console.log(inspect(ls));
+    var params = ls.first;
+    var args = ls.second.first;
+    var body = this.exp.second.second;
+    this.exp = cons(append(list(intern("lambda"), params), body),
+                    args);
+    console.log(inspect(this.exp));
+    this.pc = this.ev_application;
+  }
+
   eval_dispatch() {
-    if      (this.is_self_evaluating(this.exp)) this.goto(this.ev_self_eval);
+         if (this.is_self_evaluating(this.exp)) this.goto(this.ev_self_eval);
     else if (this.is_variable(this.exp)       ) this.goto(this.ev_variable);
     else if (this.is_quoted(this.exp)         ) this.goto(this.ev_quoted);
     else if (this.is_assignment(this.exp)     ) this.goto(this.ev_assignment);
@@ -497,6 +644,8 @@ class VM {
     else if (this.is_lambda(this.exp)         ) this.goto(this.ev_lambda);
     else if (this.is_begin(this.exp)          ) this.goto(this.ev_begin);
     else if (this.is_eval(this.exp)           ) this.goto(this.ev_eval);
+    else if (this.is_make_cont(this.exp)      ) this.goto(this.ev_make_cont);
+    else if (this.is_let(this.exp)            ) this.goto(this.ev_let);
     else if (this.is_application(this.exp)    ) this.goto(this.ev_application);
     else
       this.goto(this.unknown_expression_type);
@@ -508,39 +657,14 @@ class Procedure {
     this.params = params
     this.body = body
     this.env = env
+    this.name = undefined;
+  }
+
+  toString() {
+    if (this.name) {
+      return `#<procedure ${this.name} ${inspect(this.params)}>`;
+    } else {
+      return `#<lambda ${inspect(this.params)}>`;
+    }
   }
 }
-
-// var initenv = [ [intern("p"), console.log] ];
-// var vm1 = make_vm(list(intern("p"), 987), 
-//                   initenv);
-// console.log(vm1);
-// while (vm1.pc) {
-//   vm1.step();
-// }
-
-
-// run_vms(vms)
-//   until vms.empty?
-//     vms.delete_if { |vm|
-//       vm.pc.nil?
-//     }
-//     vms.each do |vm|
-//       vm.step
-//     end
-//   end
-// end
-
-// initenv = { "+": lambda { |*xs| xs.inject(0, :+) }, "p": proc { |*xs| p(*xs) } }
-// vm1 = make_vm([:begin,
-//                [:define, :count, [:lambda, [:n], [:p, :n], [:count, [:+, +1, :n]]]],
-//                [:count, 0],
-//               ],
-//               initenv)
-// vm2 = make_vm([:begin,
-//                [:define, :count, [:lambda, [:n], [:p, :n], [:count, [:+, -1, :n]]]],
-//                [:count, 0],
-//               ],
-//               initenv)
-
-// run_vms([vm1, vm2])
