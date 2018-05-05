@@ -79,6 +79,16 @@ class Frame {
     this.name = undefined;
   }
 
+  has_variable(name) {
+    if (this.bindings.hasKey(name)) {
+      return true;
+    } else if (this.parent) {
+      return this.parent.has_variable(name);
+    } else {
+      return false;
+    }
+  }
+
   lookup_variable(name) {
     if (this.bindings.hasKey(name)) {
       return this.bindings.lookupValue(name);
@@ -552,7 +562,7 @@ class VM {
       this.goto(this.eval_dispatch);
     } else {
       if (this.exp.second.second.second === null) { // else節がない。
-        this.val = null;
+        this.val = undefined;
         this.goto(this.continue);
       } else {
         this.exp = this.exp.second.second.second.first;
@@ -634,6 +644,112 @@ class VM {
     this.pc = this.ev_application;
   }
 
+  is_when(exp) {
+    return (exp instanceof Pair) &&
+      exp.first === intern("when");
+  }
+
+  ev_when() {
+    this.exp = list(intern("if"), this.exp.second.first,
+                    cons(intern("begin"), this.exp.second.second));
+    this.goto(this.eval_dispatch);
+  }
+
+  is_cond(exp) {
+    return (exp instanceof Pair) &&
+      exp.first === intern("cond");
+  }
+
+  expand_cond_clauses(exp) {
+    if (exp === null) {
+      return undefined; // else clause
+    } else {
+      var clause = exp.first;
+
+      if (!(clause instanceof Pair)) {
+        throw new Error("expand_cond_clauses: malformed clause");
+      }
+
+      if (clause.first === intern("else")) {
+        return cons(intern("begin"), clause.second);
+      } else {
+        return list(intern("if"), clause.first,
+                    cons(intern("begin"), clause.second),
+                    this.expand_cond_clauses(exp.second));
+      }
+    }
+  }
+
+  ev_cond() {
+    this.exp = this.expand_cond_clauses(this.exp.second);
+    this.goto(this.eval_dispatch);
+  }
+
+  is_or(exp) {
+    return (exp instanceof Pair) &&
+      exp.first === intern("or");
+  }
+
+  is_and(exp) {
+    return (exp instanceof Pair) &&
+      exp.first === intern("and");
+  }
+
+  expand_and(terms) {
+    if (terms.second === null) { // last term
+      return list(intern("let"), list(list(intern("x"), terms.first)),
+                  list(intern("if"), intern("x"), intern("x"), false));
+    } else {
+      return list(intern("if"), terms.first,
+                  this.expand_and(terms.second),
+                  false);
+    }
+  }
+
+  ev_and() {
+    if (this.exp.second === null) {
+      this.val = true;
+      this.goto(this.continue);
+    } else {
+      this.exp = this.expand_and(this.exp.second);
+      this.goto(this.eval_dispatch);
+    }
+  }
+
+  ev_or() {
+    if (this.exp.second === null) {
+      this.val = false;
+      this.goto(this.continue);
+    } else {
+      this.unev = this.exp.second.second;
+      this.exp = this.exp.second.first;
+      this.save(this.continue);
+      this.save(this.unev);
+      this.save(this.env);
+      this.continue = this.ev_or_did_eval;
+      this.goto(this.eval_dispatch);
+    }
+  }
+
+  ev_or_did_eval() {
+    this.env = this.restore();
+    this.unev = this.restore()
+    if (this.is_true(this.val)) {
+      this.continue = this.restore();
+      this.goto(this.continue);
+    } else if (this.unev === null) {
+      this.continue = this.restore();
+      this.goto(this.continue); // この val で return する
+    } else {
+      this.exp = this.unev.first;
+      this.unev = this.unev.second;
+      this.save(this.unev);
+      this.save(this.env);
+      this.continue = this.ev_or_did_eval;
+      this.goto(this.eval_dispatch);
+    }
+  }
+
   eval_dispatch() {
          if (this.is_self_evaluating(this.exp)) this.goto(this.ev_self_eval);
     else if (this.is_variable(this.exp)       ) this.goto(this.ev_variable);
@@ -641,11 +757,15 @@ class VM {
     else if (this.is_assignment(this.exp)     ) this.goto(this.ev_assignment);
     else if (this.is_definition(this.exp)     ) this.goto(this.ev_definition);
     else if (this.is_if(this.exp)             ) this.goto(this.ev_if);
+    else if (this.is_when(this.exp)           ) this.goto(this.ev_when);
+    else if (this.is_cond(this.exp)           ) this.goto(this.ev_cond);
     else if (this.is_lambda(this.exp)         ) this.goto(this.ev_lambda);
     else if (this.is_begin(this.exp)          ) this.goto(this.ev_begin);
     else if (this.is_eval(this.exp)           ) this.goto(this.ev_eval);
     else if (this.is_make_cont(this.exp)      ) this.goto(this.ev_make_cont);
     else if (this.is_let(this.exp)            ) this.goto(this.ev_let);
+    else if (this.is_and(this.exp)            ) this.goto(this.ev_and);
+    else if (this.is_or(this.exp)             ) this.goto(this.ev_or);
     else if (this.is_application(this.exp)    ) this.goto(this.ev_application);
     else
       this.goto(this.unknown_expression_type);

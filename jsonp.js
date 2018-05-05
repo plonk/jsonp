@@ -120,6 +120,15 @@ function inspect(val) {
     } else {
       return "(" + inspect(val.first) + " . " + inspect(val.second) + ")";
     }
+  } else if (val instanceof Array) {
+    var str = "#(";
+    for (var i = 0; i < val.length; i++) {
+      if (i !== 0)
+        str += " ";
+      str += inspect(val[i]);
+    }
+    str += ")";
+    return str;
   } else {
     return "" + val; // stringify in the JavaScript way
   }
@@ -142,9 +151,8 @@ window.onload = () => {
   };
 
   function dumpFrames(frame) {
-    var i = 0;
     while (frame) {
-      display(i++ + ": ");
+      display("\t" + "in ");
       print(frame.name);
       frame = frame.parent;
     }
@@ -286,7 +294,7 @@ window.onload = () => {
       var ch = kbdBuffer[0];
       if (ch === "\x0d")
         ch = "\x0a";
-      kbdBuffer = kbdBuffer.slice(2);
+      kbdBuffer = kbdBuffer.slice(1);
       return ch;
     }
     peekChar() {
@@ -430,7 +438,29 @@ window.onload = () => {
       [intern(">"), function (a, b) { return a > b; }],
       [intern("<="), function (a, b) { return a <= b; }],
       [intern(">="), function (a, b) { return a >= b; }],
+      [intern("="), function (a, b) { return a === b; }],
       [intern("string->symbol"), intern],
+      [intern("vector?"),function(vector){ return vector instanceof Array;}],
+      [intern("make-vector"),function(k, fill){ return new Array(k).fill(fill); }],
+      [intern("vector"),function(){return Array.from(arguments);}],
+      [intern("vector-length"),function(vector){return vector.length;}],
+      [intern("vector-ref"),function(vector, k){return vector[k];}],
+      [intern("vector-set!"),function(vector, k, obj){vector[k] = obj; return intern("ok")}],
+      [intern("vector->list"),function(vector){return list.apply(null, vector);}],
+      [intern("list->vector"),function(ls){
+        var res = [];
+        while (ls !== null) {
+          res.push(ls.first);
+          ls = ls.second;
+        }
+        return res;
+      }],
+      [intern("vector-fill!"),function(vector, fill){vector.fill(fill); return intern("ok");}],
+      [intern("error"), function(message){ throw new Error(message); }],
+      [intern("pair?"), function(val){ return val instanceof Pair; }],
+      [intern("string-take"), function(str, n) { return str.slice(0, n); }],
+      [intern("char->integer"), function(c) { return c.codePointAt(0); }],
+      [intern("integer->char"), function(n) { return String.fromCodePoint(n); }],
     ];
     return initenv;
   }
@@ -501,8 +531,13 @@ window.onload = () => {
             ttyOutputPort.writeChar(ch);
           ttyOutputPort.writeChar("\n");
           dumpFrames(vm.env);
-          var c = vm.env.lookup_variable(intern('*resume-from-error*'));
-          vm.restore_from_continuation(c);
+          if (vm.env.has_variable(intern('*resume-from-error*'))) {
+            var c = vm.env.lookup_variable(intern('*resume-from-error*'));
+            vm.restore_from_continuation(c);
+          } else {
+            // terminate this process.
+            vms.pop();
+          }
         }
       }
 

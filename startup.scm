@@ -53,44 +53,69 @@
             (set! step (car (cdr rest))))))
   (iter count start))
 
+(define *read-line-history* #f)
+
 (define (read-line port)
+  (define (caret-notate c)
+    (string-append "^" (integer->char (+ (char->integer c) 64))))
+  (define (char-display-width c)
+    (if (char-control? c)
+        2
+        (wcwidth c)))
+  (define (char-display c)
+    (if (char-control? c)
+        (string-append "\x1b[35m" (caret-notate c) "\x1b[0m")
+        c))
   (define line "")
   (define ch (undefined))
   (define (loop)
     (set! ch (read-char port))
-    (if (eq? ch "\x0a") ; RETURN
-        (begin
-          (write-char ch (current-output-port))
-          'done)
-        (if (eq? ch "\x15") ; ^U
-            (begin
-              (for-each
-               (lambda (ch)
-                 (if (eq? (wcwidth ch) 1)
-                     (display "\x08 \x08")
-                     (display "\x08 \x08\x08 \x08")))
-               (string->list line))
-              (set! line "")
-              (loop))
-            (if (eq? ch "\x04") ; ^D
-                (if (eq? "" line)
-                    (begin
-                      (set! line (eof-object))
-                      'done)
-                    (loop))
-                (begin
-                  (if (eq? ch "\x7f") ; DEL
-                      (if (not (eq? 0 (string-length line)))
-                          (let ((last-char (string-ref line (+ (string-length line) -1))))
-                            (set! line (substring line 0 (+ (string-length line) -1)))
-                            (if (eq? (wcwidth last-char) 1)
-                                (display "\x08 \x08") ; half width
-                                (display "\x08 \x08\x08 \x08")))) ; full width
-                      (begin
-                        (write-char ch (current-output-port))
-                        (set! line (string-append line ch))))
-                  (loop))))))
+    (cond ((eq? ch "\x0a") ; RETURN
+           (write-char ch (current-output-port))
+           'done)
+          ((eq? ch "\x15") ; ^U
+           (for-each
+            (lambda (ch)
+              (if (= 2 (char-display-width ch))
+                  (display "\x08 \x08\x08 \x08")
+                  (display "\x08 \x08")))
+            (string->list line))
+           (set! line "")
+           (loop))
+          ((eq? ch "\x04") ; ^D
+           (if (eq? "" line)
+               (begin
+                 (set! line (eof-object))
+                 'done)
+               (loop)))
+          ((eq? ch "\x10") ; ^P
+           (if *read-line-history*
+               (begin
+                 (for-each
+                  (lambda (ch)
+                    (if (= 2 (char-display-width ch))
+                        (display "\x08 \x08\x08 \x08")
+                        (display "\x08 \x08")))
+                  (string->list line))
+                 (set! line *read-line-history*)
+                 (set! *read-line-history* #f)
+                 (display (apply string-append (map char-display (string->list line)))))
+               (display "\x07"))
+           (loop))
+          ((eq? ch "\x7f") ; DEL
+           (when (not (eq? 0 (string-length line)))
+                 (let ((last-char (string-ref line (- (string-length line) 1))))
+                   (set! line (substring line 0 (- (string-length line) 1)))
+                   (if (= 2 (char-display-width last-char))
+                       (display "\x08 \x08\x08 \x08")
+                       (display "\x08 \x08"))))
+           (loop))
+          (else
+           (write-char (char-display ch) (current-output-port))
+           (set! line (string-append line ch))
+           (loop))))
   (loop)
+  (set! *read-line-history* line)
   line)
 
 (define (call-with-current-continuation f)
@@ -135,3 +160,64 @@
 
 (define (zero? n)
   (eq? n 0))
+
+(define (reverse ls)
+  (define (iter xs acc)
+    (if (null? xs)
+        acc
+        (iter (cdr xs) (cons (car xs) acc))))
+  (iter ls '()))
+
+(define (min . xs)
+  (cond ((null? xs)
+         (error "no args"))
+        ((null? (cdr xs))
+         (car xs))
+        (else
+         (if (< (car xs) (cadr xs))
+             (apply min (cons (car xs) (cdr (cdr xs))))
+             (apply min (cdr xs))))))
+
+(define (max . xs)
+  (cond ((null? xs)
+         (error "no args"))
+        ((null? (cdr xs))
+         (car xs))
+        (else
+         (if (> (car xs) (cadr xs))
+             (apply max (cons (car xs) (cdr (cdr xs))))
+             (apply max (cdr xs))))))
+
+(define (memq obj ls)
+  (if (null? ls)
+      #f
+      (if (eq? (car ls) obj)
+          ls
+          (memq obj (cdr ls)))))
+
+(define (memv obj ls)
+  (if (null? ls)
+      #f
+      (if (eqv? (car ls) obj)
+          ls
+          (memq obj (cdr ls))))
+)
+(define (member obj ls)
+  (if (null? ls)
+      #f
+      (if (equal? (car ls) obj)
+          ls
+          (memq obj (cdr ls)))))
+
+(define (char-control? c)
+  (let ((n (char->integer c)))
+    (if (or (and (<= 0 n)
+                 (< n 32))
+            (= n 127))
+        #t
+        #f)))
+
+(define (map f xs)
+  (if (null? xs)
+      '()
+      (cons (f (car xs)) (map f (cdr xs)))))
