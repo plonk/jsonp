@@ -230,3 +230,7 @@ span { overflow: visible }
 @keyframes blinker {
     50% { opacity: 0 }
 }
+
+pre {
+    background-color: #ddd;
+}
