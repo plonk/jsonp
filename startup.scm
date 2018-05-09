@@ -55,7 +55,8 @@
 
 (define *read-line-history* #f)
 
-(define (read-line port)
+(define (read-line . args)
+  (define port #f)
   (define (caret-notate c)
     (string-append "^" (integer->char (+ (char->integer c) 64))))
   (define (char-display-width c)
@@ -114,6 +115,9 @@
            (write-char (char-display ch) (current-output-port))
            (set! line (string-append line ch))
            (loop))))
+  (if (null? args)
+      (set! port (current-input-port))
+      (set! port (car args)))
   (loop)
   (set! *read-line-history* line)
   line)

@@ -80,8 +80,11 @@ function readFromString(str) {
 function code_to_sequence(code) {
   var [type, val, rest] = readFromString(code);
   if (type === "error") {
-    console.log(val);
-    return null;
+    if (val === "empty string") {
+      return null;
+    } else {
+      throw new Error(val);
+    }
   } else {
     return cons(val, code_to_sequence(rest));
   }
@@ -267,8 +270,10 @@ window.onload = () => {
       var scrollAmount = receiver.rows;
       if (e.key === 'PageUp' && e.shiftKey) {
         receiver.scrollBack(scrollAmount);
+        fullRedraw = true;
       } else if (e.key === 'PageDown' && e.shiftKey){
         receiver.scrollBack(-scrollAmount);
+        fullRedraw = true;
       } else {
         if (transmitter) {
           if (stickyCtrl) {
@@ -416,6 +421,10 @@ window.onload = () => {
       [intern("sys-get-file-contents"), function (filename) {
         return $ASSETS[filename];
       }],
+      [intern("sys-put-file-contents"), function (filename, contents) {
+        $ASSETS[filename] = contents;
+        return intern("ok");
+      }],
       [intern("split"), function (exp, str) {
         var r = new RegExp(exp);
         return list.apply(null, str.split(r));
@@ -456,11 +465,21 @@ window.onload = () => {
         return res;
       }],
       [intern("vector-fill!"),function(vector, fill){vector.fill(fill); return intern("ok");}],
+      [intern("vector-splice!"), function() {
+        var vector = arguments[0];
+        var args = Array.from(arguments).slice(1);
+        vector.splice.apply(vector, args);
+        return intern("ok");
+      }],
       [intern("error"), function(message){ throw new Error(message); }],
       [intern("pair?"), function(val){ return val instanceof Pair; }],
       [intern("string-take"), function(str, n) { return str.slice(0, n); }],
       [intern("char->integer"), function(c) { return c.codePointAt(0); }],
       [intern("integer->char"), function(n) { return String.fromCodePoint(n); }],
+      [intern("sys-time"), function() { return (+new Date) / 1000; }],
+      [intern("list->string"), function(ls) {
+        return array(ls).join("");
+      }],
     ];
     return initenv;
   }
@@ -512,6 +531,7 @@ window.onload = () => {
 
   function loop() {
     var start = +new Date;
+    var ninsts = 0;
 
     while (vms.length > 0) {
       var vm = vms[vms.length - 1];
@@ -524,6 +544,7 @@ window.onload = () => {
       } else {
         try {
           vm.step();
+          ninsts++;
         } catch (e) {
           console.log(e);
           var str = inspect(e);
@@ -544,10 +565,31 @@ window.onload = () => {
       if ((+new Date) - start >= ALLOCATED_TIME_MSEC)
         break;
     }
+    updateInstructionCount(ninsts);
 
     window.requestAnimationFrame(loop);
   }
   window.requestAnimationFrame(loop);
+
+  var instructionCount = null;
+  var INST_AVERAGE_FACTOR = 0.999;
+  var initialSamples = [];
+  function updateInstructionCount(n) {
+    var ips = n * 60
+    if (initialSamples && initialSamples.length < 180) {
+      initialSamples.push(ips);
+    } else if (initialSamples && initialSamples.length === 180) {
+      instructionCount = initialSamples.reduce((a, b) => a + b) / 180;
+      initialSamples = null;
+    } else {
+      instructionCount = (instructionCount * INST_AVERAGE_FACTOR) + (1 - INST_AVERAGE_FACTOR) * ips;
+    }
+    if (instructionCount !== null) {
+      $('#instructions').text(`${Math.round(instructionCount/1000)} KIPS`);
+    } else {
+      $('#instructions').text("calculating...");
+    }
+  }
 
   window.onblur = function (e) {
     windowFocused = false;
