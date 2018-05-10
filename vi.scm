@@ -3,26 +3,37 @@
 (define *posy* 0) ; 有効範囲 [0,|*buffer*|)
 (define *posx* 0) ; 有効範囲 [0,|line|)
 (define *screen-top* 0)
-(define *insert-mode* #f)
+(define *input-mode* #f)
 (define *filename* #f)
-(define *old-screen-top #f)
-(define *normal-mode-table*
+(define *old-screen-top* #f)
+(define *command-mode-table*
   (list
+   (list "\x0c" (lambda ()
+                  (clear-command-line)
+                  (set! *old-screen-top* #f)))
+
    (list "O" (lambda () ;; 上に行を追加
                (clear-command-line)
                (vector-splice! *buffer* *posy* 0 "")
-               (set! *old-screen-top #f)))
+               (set! *old-screen-top* #f)))
 
    (list "o" (lambda () ;; 下に行を追加
                (clear-command-line)
                (vector-splice! *buffer* (+ 1 *posy*) 0 "")
                (set! *posy* (+ 1 *posy*))
                (minimum-scroll)
-               (set! *old-screen-top #f)))
+               (set! *old-screen-top* #f)))
 
-   (list "G" (lambda () ;; ファイルの最後に移動
+   (list "\x07" (lambda (n)
+                  (move-cursor 23 0)
+                  (clear-command-line)
+                  (display (str *filename* ": line " (+ 1 *posy*) " of " (vector-length *buffer*)))))
+
+   (list "G" (lambda (n) ;; ファイルの最後に移動
                (clear-command-line)
-               (set! *posy* (- (vector-length *buffer*) 1))
+               (if n
+                   (set! *posy* (min (- n 1) (- (vector-length *buffer*) 1)))
+                   (set! *posy* (- (vector-length *buffer*) 1)))
                (minimum-scroll)))
 
    (list "d" (lambda () ;; 行削除
@@ -31,7 +42,7 @@
                (if (zero? (vector-length *buffer*))
                    (vector-splice! *buffer* 0 0 ""))
                (set! *posy* (min *posy* (- (vector-length *buffer*) 1)))
-               (set! *old-screen-top #f)))
+               (set! *old-screen-top* #f)))
 
    (list "x" (lambda () ;; 文字削除
                (clear-command-line)
@@ -49,40 +60,49 @@
 
    (list "i" (lambda ()
                (clear-command-line)
-               (set! *insert-mode* #t)))
+               (set! *input-mode* #t)))
 
    (list "a" (lambda ()
                (clear-command-line)
-               (set! *insert-mode* #t)
+               (set! *input-mode* #t)
                (set! *posx* (min (+ 1 *posx*) (string-length (vector-ref *buffer* *posy*))))))
 
-   (list "j" (lambda ()
+   (list "j" (lambda (n)
+               (set! n (or n 1))
                (clear-command-line)
-               (if (eq? *posy* (- (vector-length *buffer*) 1))
+               (let ((target (min (+ n *posy*) (- (vector-length *buffer*) 1))))
+                 (if (eq? *posy* target)
                    (beep)
                    (begin
-                     (set! *posy* (+ 1 *posy*))
+                     (set! *posy* target)
                      (minimum-scroll)
-                     (clamp-posx!)))))
-   (list "k" (lambda ()
+                     (clamp-posx!))))))
+   (list "k" (lambda (n)
+               (set! n (or n 1))
                (clear-command-line)
-               (if (eq? *posy* 0)
-                   (beep)
-                   (begin
-                     (set! *posy* (+ -1 *posy*))
-                     (minimum-scroll)
-                     (clamp-posx!)))))
-   (list "l" (lambda ()
+               (let ((target (max (- *posy* n) 0)))
+                 (if (eq? *posy* target)
+                     (beep)
+                     (begin
+                       (set! *posy* target)
+                       (minimum-scroll)
+                       (clamp-posx!))))))
+
+   (list "l" (lambda (n)
+               (set! n (or n 1))
                (clear-command-line)
-               (if (eq? *posx*
-                        (max 0 (- (string-length (vector-ref *buffer* *posy*)) 1)))
+               (let ((target (min (+ n *posx*) (- (string-length (vector-ref *buffer* *posy*)) 1))))
+                 (if (eq? *posx* target)
                    (beep)
-                   (set! *posx* (+ 1 *posx*)))))
-   (list "h" (lambda ()
+                   (set! *posx* target)))))
+
+   (list "h" (lambda (n)
+               (set! n (or n 1))
                (clear-command-line)
-               (if (eq? *posx* 0)
-                   (beep)
-                   (set! *posx* (+ -1 *posx*)))))
+               (let ((target (max (- *posx* n) 0)))
+                 (if (eq? *posx* target)
+                     (beep)
+                     (set! *posx* target)))))
 
    (list "^" (lambda ()
                (clear-command-line)
@@ -112,9 +132,10 @@
                    (display "\r")
                    (clear-line)
                    (display "Unknown command")))
+                   (set! *old-screen-top* #f)
                  )))
    ))
-(define *insert-mode-table* (list
+(define *input-mode-table* (list
                              (list "\n" (lambda ()
                                           (let ((left (substring (vector-ref *buffer* *posy*) 0 *posx*))
                                                 (right (substring (vector-ref *buffer* *posy*) *posx*(vector-length (vector-ref *buffer* *posy*)))))
@@ -122,10 +143,10 @@
                                             (vector-splice! *buffer* (+ 1 *posy*) 0 right)
                                             (set! *posy* (+ 1 *posy*))
                                             (set! *posx* 0)
-                                            (set! *old-screen-top #f) ; ugly. force refresh
+                                            (set! *old-screen-top* #f) ; ugly. force refresh
                                             )))
                              (list "\x1b" (lambda ()
-                                            (set! *insert-mode* #f)
+                                            (set! *input-mode* #f)
                                             (set! *posx* (max 0 (- *posx* 1)))
                                             ))))
 
@@ -342,28 +363,70 @@
    phrase
    (substring string pos (string-length string))))
 
+(define (input-mode-handle-key key)
+  (let ((entry (assoc key *input-mode-table*)))
+    (if entry
+        ((cadr entry))
+        (begin
+          (vector-set! *buffer* *posy* (string-insert (vector-ref *buffer* *posy*) *posx* key))
+          (set! *posx* (+ 1 *posx*))))))
+
+(define (read-command)
+  (define (parse-prefix prefix)
+    (if (eq? "" prefix)
+        #f
+        (string->number prefix)))
+  (define (iter prefix)
+    (let ((key (read-char)))
+      (cond
+       ((or (and (not (eq? prefix "")) (eq? key "0"))
+            (eq? key "1")
+            (eq? key "2")
+            (eq? key "3")
+            (eq? key "4")
+            (eq? key "5")
+            (eq? key "6")
+            (eq? key "7")
+            (eq? key "8")
+            (eq? key "9"))
+        (iter (string-append prefix key)))
+       (#t
+        (let ((entry (assoc key *command-mode-table*)))
+          (if entry
+              (list key (parse-prefix prefix))
+              #f))))))
+  (iter ""))
+
 (define (command-loop)
+
   (cursor-visible #f)
-  ;(cls)
-  (if (not (eq? *old-screen-top *screen-top*))
+
+  ;; スクロール位置が変更されていたら画面を再描画
+  (if (not (eq? *old-screen-top* *screen-top*))
       (begin
         (render-buffer *buffer* *screen-top* (+ 23 *screen-top*))
-        (set! *old-screen-top *screen-top*)))
+        (set! *old-screen-top* *screen-top*)))
+  ;; カーソル行を描画
   (move-cursor (- *posy* *screen-top*) 0)
   (render-current-line (vector-ref *buffer* *posy*) *posx*)
+
   (cursor-visible #t)
-  (let ((key (read-char))
-        (table (if *insert-mode* *insert-mode-table* *normal-mode-table*)))
-    (let ((entry (assoc key table)))
-      (if entry
-          ((cadr entry))
-          (if *insert-mode*
-              (begin
-                (vector-set! *buffer* *posy* (string-insert (vector-ref *buffer* *posy*) *posx* key))
-                (set! *posx* (+ 1 *posx*))))))
-    (if *quitting*
-        'done
-        (command-loop))))
+
+  (if *input-mode*
+      (let ((key (read-char)))
+        (input-mode-handle-key key))
+      (let ((cmd (read-command)))
+        (if cmd
+            (let ((key (car cmd))
+                  (count (cadr cmd)))
+              (let ((entry (assoc key *command-mode-table*)))
+                ((cadr entry) count)))
+            (beep)))
+      )
+
+  (if *quitting*
+    'done
+    (command-loop)))
 
 (if (or (null? *argv*) (eq? "" (car *argv*)))
     (begin

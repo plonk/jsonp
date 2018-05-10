@@ -480,6 +480,7 @@ window.onload = () => {
       [intern("list->string"), function(ls) {
         return array(ls).join("");
       }],
+      [intern("string->number"), function (str) { return +str; }],
     ];
     return initenv;
   }
