@@ -136,6 +136,17 @@
                  )))
    ))
 (define *input-mode-table* (list
+                             (list "\x7f" (lambda ()
+                                            (cond
+                                             ((zero? *posx*) (beep))
+                                             (#t
+                                              (let ((current-line (vector-ref *buffer* *posy*)))
+                                                (vector-set! *buffer* *posy*
+                                                             (string-append
+                                                              (substring current-line 0 (max 0 (- *posx* 1)))
+                                                              (substring current-line *posx* (string-length current-line)))))
+                                              (set! *posx* (max 0 (- *posx* 1)))))))
+
                              (list "\n" (lambda ()
                                           (let ((left (substring (vector-ref *buffer* *posy*) 0 *posx*))
                                                 (right (substring (vector-ref *buffer* *posy*) *posx*(vector-length (vector-ref *buffer* *posy*)))))
