@@ -280,6 +280,7 @@ window.addEventListener('load', () => {
         throw new Error("readChar: char not ready");
 
       var ch = kbdBuffer[0];
+      // CR を LF に変換。
       if (ch === "\x0d")
         ch = "\x0a";
       kbdBuffer = kbdBuffer.slice(1);
