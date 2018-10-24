@@ -18,7 +18,9 @@
       (set! port (car args)))
   (if (char-ready? port)
       (read-char-nonblock port)
-      (read-char port)))
+      (begin
+        (syscall 'sleep 0.05)
+        (read-char port))))
 
 (define (length ls)
   (if (null? ls)

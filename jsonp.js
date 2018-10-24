@@ -527,8 +527,26 @@ window.addEventListener('load', () => {
         vms.pop();
         interrupted = false;
       } else {
+        if (vm.syscall) { // システムコールの終了待ち。
+          break;
+        }
+
         try {
           vm.step();
+          if (vm.syscall !== null) {
+            if (vm.syscall[0].name == "sleep") {
+              setTimeout(() => {
+                vm.syscall = null;
+                vm.pc = vm.continue;
+                vm.val = intern("ok");
+              }, 1000 * vm.syscall[1]);
+            } else {
+              vm.syscall = null;
+              vm.pc = vm.continue;
+              vm.val = intern("error-unknown-syscall");
+            }
+            break;
+          }
           ninsts++;
         } catch (e) {
           console.log(e);

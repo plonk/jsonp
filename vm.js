@@ -217,8 +217,9 @@ class VM {
     this.stack = [];
     this.continue = null;
     this.proc = null;
-
     this.interaction_env = undefined;
+
+    this.syscall = null;
   }
 
   make_continuation() {
@@ -750,6 +751,43 @@ class VM {
     }
   }
 
+  is_syscall(exp) {
+    return (exp instanceof Pair) &&
+      exp.first === intern("syscall");
+  }
+
+  syscall_handler() {
+    this.syscall = Array.from(arguments);
+  }
+
+  ev_syscall() {
+    this.save(this.continue);
+    this.save(this.env)
+
+    this.save(this.exp.second.second); // unev
+
+    this.exp = this.exp.second.first;
+    this.continue = this.ev_syscall_did_operator;
+    this.goto(this.eval_dispatch);
+  }
+
+  ev_syscall_did_operator() {
+    console.log("s_did_operator");
+
+    this.unev = this.restore();
+    this.env = this.restore(); // ???
+
+    this.argl = list(this.val);
+    this.proc = this.syscall_handler.bind(this);
+
+    if (this.unev === null) {
+      this.goto(this.apply_dispatch);
+    } else {
+      this.save(this.proc);
+      this.goto(this.ev_appl_operand_loop);
+    }
+  }
+
   eval_dispatch() {
          if (this.is_self_evaluating(this.exp)) this.goto(this.ev_self_eval);
     else if (this.is_variable(this.exp)       ) this.goto(this.ev_variable);
@@ -766,6 +804,7 @@ class VM {
     else if (this.is_let(this.exp)            ) this.goto(this.ev_let);
     else if (this.is_and(this.exp)            ) this.goto(this.ev_and);
     else if (this.is_or(this.exp)             ) this.goto(this.ev_or);
+    else if (this.is_syscall(this.exp)        ) this.goto(this.ev_syscall);
     else if (this.is_application(this.exp)    ) this.goto(this.ev_application);
     else
       this.goto(this.unknown_expression_type);
