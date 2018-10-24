@@ -137,8 +137,7 @@ function inspect(val) {
   }
 }
 
-window.onload = () => {
-  var beepAudio = new Audio('beep.wav');
+window.addEventListener('load', () => {
   var kbdBuffer = "";
 
   var print = function (val) {
@@ -166,18 +165,8 @@ window.onload = () => {
     return (n <= 31);
   }
 
-  var receiver = new Receiver(80, 24, {
-    cursorKeyMode: function (mode) {
-      transmitter.cursorKeyMode = mode;
-    },
-    beep: function() {
-      beepAudio.play();
-    },
-  });
   var transmitter;
   var windowFocused = true;
-  var fullRedraw = false;
-  var renderer = new Renderer(receiver);
   var interrupted = false;
 
   function updateBusyIndicator() {
@@ -196,14 +185,8 @@ window.onload = () => {
     }
   });
 
-  // fullRedraw の場合は文字画面とオーバーレイ画面の両方が再描画される。
-  // 何も文字バッファーに変更がなければ fullRedraw は false。
-  var render = function () {
-    renderer.render(fullRedraw, windowFocused)
-    fullRedraw = false;
-    window.requestAnimationFrame(render)
-  };
-  window.requestAnimationFrame(render)
+  // force_redraw の場合は文字画面とオーバーレイ画面の両方が再描画される。
+  // 何も文字バッファーに変更がなければ force_redraw は false。
 
   var ctrlJustPressed = false;
   var stickyCtrl = false;
@@ -270,10 +253,10 @@ window.onload = () => {
       var scrollAmount = receiver.rows;
       if (e.key === 'PageUp' && e.shiftKey) {
         receiver.scrollBack(scrollAmount);
-        fullRedraw = true;
+        force_redraw = true;
       } else if (e.key === 'PageDown' && e.shiftKey){
         receiver.scrollBack(-scrollAmount);
-        fullRedraw = true;
+        force_redraw = true;
       } else {
         if (transmitter) {
           if (stickyCtrl) {
@@ -323,7 +306,7 @@ window.onload = () => {
       } else {
         receiver.feed(ch);
       }
-      fullRedraw = true
+      force_redraw = true
     }
   }
   var ttyOutputPort = new TtyOutputPort;
@@ -370,7 +353,7 @@ window.onload = () => {
       [intern("p"), function(val) {
         var str = (""+val) + "\n";
         receiver.feed(str.replace(/\n/, "\r\n"));
-        fullRedraw = true
+        force_redraw = true
       }],
       [intern("print"), print],
       [intern("display"), display],
@@ -594,13 +577,13 @@ window.onload = () => {
 
   window.onblur = function (e) {
     windowFocused = false;
-    fullRedraw = true;
+    force_redraw = true;
   };
 
   window.onfocus = function (e) {
     windowFocused = true;
-    fullRedraw = true;
+    force_redraw = true;
   };
 
   updateBusyIndicator();
-};
+});
