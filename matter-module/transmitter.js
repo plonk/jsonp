@@ -1,3 +1,20 @@
+/*
+  This file is part of Mogeweb.
+
+  Mogeweb is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 2 of the License, or
+  (at your option) any later version.
+
+  Mogeweb is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with Mogeweb.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
 'use strict';
 
 function Transmitter(term) {
@@ -28,8 +45,10 @@ var SEQUENCE_FUNCTION_KEYS = {
 
   'Insert'     : '\x1b[2~',
   'Delete'     : '\x1b[3~',
-  'Home'       : '\x1b[1~',
-  'End'        : '\x1b[4~',
+  // 'Home'       : '\x1b[1~',
+  // 'End'        : '\x1b[4~',
+  'Home'       : '\x1b[H',
+  'End'        : '\x1b[F',
   'PageUp'     : '\x1b[5~',
   'PageDown'   : '\x1b[6~',
 };
@@ -46,6 +65,8 @@ var APPLICATION_FUNCTION_KEY_TABLE = {
   'ArrowDown'  : '\x1bOB',
   'ArrowRight' : '\x1bOC',
   'ArrowLeft'  : '\x1bOD',
+  'Home'       : '\x1bOH',
+  'End'        : '\x1bOF',
 };
 
 var MODIFIER_TABLE = {
@@ -99,12 +120,14 @@ function modifyFunctionKey (seq, ctrlKey, altKey, shiftKey) {
 Transmitter.prototype.toCharacter = function (key, ctrlKey, altKey, shiftKey) {
   console.log(this.cursorKeyMode);
   if (this.cursorKeyMode === 'application' &&
+      !(ctrlKey || altKey || shiftKey) && // unmodified
       APPLICATION_FUNCTION_KEY_TABLE[key]) {
       return APPLICATION_FUNCTION_KEY_TABLE[key];
   }
 
   if (key == 'Backspace' && ctrlKey && altKey) { return '\x1b\x08'; }
   if (key == 'Backspace' && ctrlKey) { return '\x08'; }
+  if (key == 'Tab' && shiftKey) { return '\x1b[Z'; }
   if (CONTROL_CHARACTER_KEYS[key]) {
     return CONTROL_CHARACTER_KEYS[key];
   }

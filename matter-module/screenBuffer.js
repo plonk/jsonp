@@ -1,3 +1,20 @@
+/*
+  This file is part of Mogeweb.
+
+  Mogeweb is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 2 of the License, or
+  (at your option) any later version.
+
+  Mogeweb is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with Mogeweb.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
 'use strict';
 
 //var {orElse} = require('./util');
@@ -34,26 +51,14 @@ GraphicAttrs.prototype.reset = function () {
 GraphicAttrs.prototype.clone = function () {
   var res = new GraphicAttrs();
   for (var attr of GraphicAttrs_FIELDS) {
-    if (this[attr] instanceof Array)
-      res[attr] = [].concat(this[attr]); // 配列プロパティは浅いコピーを作る。
-    else
-      res[attr] = this[attr];
+    res[attr] = this[attr];
   }
   return res;
 };
 
 GraphicAttrs.prototype.equals = function (other) {
   for (var attr of GraphicAttrs_FIELDS) {
-    if (this[attr] instanceof Array && other[attr] instanceof Array) {
-      if (this[attr].length === other[attr].length) {
-        for (var i = 0; i < this[attr].length; i++) {
-          if (this[attr][i] !== other[attr][i])
-            return false;
-        }
-      } else {
-        return false;
-      }
-    } else if (this[attr] !== other[attr]) {
+    if (this[attr] !== other[attr]) {
       return false;
     }
   }

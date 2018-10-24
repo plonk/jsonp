@@ -1,3 +1,20 @@
+/*
+  This file is part of Mogeweb.
+
+  Mogeweb is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 2 of the License, or
+  (at your option) any later version.
+
+  Mogeweb is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with Mogeweb.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
 'use strict';
 
 var eastasianwidth = eaw; //require('eastasianwidth');
@@ -14,6 +31,9 @@ function Receiver(columns, rows, callbacks) {
     resize(cols, rows) {},
     cursorKeyMode(mode) {},
     beep() {},
+    loadCharacterSet() {},
+    playSound() {},
+    playSound2() {},
   };
   for (var name of Object.keys(this.callbacks)) {
     if (callbacks[name]) {
@@ -240,7 +260,7 @@ Receiver.prototype.addCharacter = function (c) {
     if (this.insertMode) {
       this.insertBlankCharacters('2');
     }
-    if (this.cursor_x === this.columns - 1) {
+    if (this.cursor_x >= this.columns - 1) {
       if (this.autoWrap) {
         this.advanceCursor();
       }
@@ -287,7 +307,7 @@ Receiver.prototype.fc_controlSequenceIntroduced = function (c) {
     } else if (/^[\x40-\x7e]$/.exec(c)) {
       this.dispatchCommand(c, args);
       return this.fc_normal;
-    } else if (/^[=?>0-9;]$/.exec(c)) {
+    } else if (/^[\x30-\x3f\x20-\x2f]$/.exec(c)) { // parameter or intermediate
       args += c;
       return parsingControlSequence;
     } else {
@@ -1040,7 +1060,23 @@ Receiver.prototype.cmd_scrollDown = function (args_str) {
   this.scrollDown(this.scrollingRegionTop, this.scrollingRegionBottom, num);
 };
 
-Receiver.prototype.dispatchCommand = function (letter, args_str) {
+Receiver.prototype.dispatchTilde = function (args_str) {
+  var intermediate = args_str[args_str.length - 1]
+  if (intermediate === ",") {
+    // play sound
+    var [p1, p2, p3] = args_str.slice(0, args_str.length-1).split(/;/);
+    this.callbacks.playSound(+p1, +p2, +p3);
+  } else if (intermediate === "-") {
+    // YOTEPS
+    var [p1, p2, p3] = args_str.slice(0, args_str.length-1).split(/;/);
+    this.callbacks.playSound2(+p1, +p2, +p3);
+  } else {
+    console.log(`unknown intermediate character ${intermediate}. final = '~'`);
+  }
+};
+
+// After CSI.
+ Receiver.prototype.dispatchCommand = function (letter, args_str) {
   if (args_str[0] === '?') {
     this.dispatchCommandQuestion(letter, args_str.slice(1));
     return this.fc_normal;
@@ -1131,6 +1167,9 @@ Receiver.prototype.dispatchCommand = function (letter, args_str) {
     break;
   case 'T':
     this.cmd_scrollDown(args_str);
+    break;
+  case '~':
+    this.dispatchTilde(args_str);
     break;
   default:
     console.log(`unknown command letter ${letter} args ${args_str}`);
@@ -1316,9 +1355,23 @@ Receiver.prototype.fc_singleShift3 = function (c) {
   return this.fc_normal;
 };
 
-Receiver.prototype.dispatchDeviceControngString = function (args_str) {
+Receiver.prototype.dispatchDeviceControlString = function (args_str) {
+  var match;
+
   if (args_str === '$q"p') {
     this.callbacks.write('\x1bP1$r64;1"p\e\\');
+  } else if ((match = /^([\x30-\x3f]*)([\x20-\x2f]*)([\x40-\x7e])/.exec(args_str)) !== null) {
+    var [_, parameterBytes, intermediateBytes, finalByte] = match;
+    if (finalByte === '{') {
+      // DECDLD
+
+      var str = args_str.slice(match[0].length);
+      var dscs = str.slice(0,2);
+      var font = str.slice(2);
+      this.callbacks.loadCharacterSet(parameterBytes, dscs, font);
+    } else {
+      console.log('got DCS', inspect(args_str));
+    }
   } else {
     console.log('got DCS', inspect(args_str));
   }
@@ -1330,7 +1383,7 @@ Receiver.prototype.fc_deviceControlString = function (c) {
     if (c === '\x1b') {
       return function (d) {
         if (d === '\\') {
-          this.dispatchDeviceControngString(args);
+          this.dispatchDeviceControlString(args);
           return this.fc_normal;
         } else {
           args += '\x1b' + d;
