@@ -1,5 +1,18 @@
 'use strict';
 
+function readCharacterLiteral(spec) {
+  if (spec.length == 1) {
+    return new Character(spec);
+  } else {
+    switch (spec) {
+    case "space": return new Character(" ");
+    case "newline": return new Character("\n");
+    default:
+      throw new Error("unknown character specification: " + spec);
+    }
+  }
+}
+
 // string → [type, value, string]
 function readFromString(str) {
   var m;
@@ -10,7 +23,7 @@ function readFromString(str) {
   } else if (m = (/^'/).exec(str)) {
     var [type, value, rest] = readFromString(str.slice(1));
     if (type === "sexp")
-      return ["sexp", cons(intern("quote"), cons(value, null)), rest];
+      return ["sexp", cons("quote", cons(value, null)), rest];
     else
       return [type, value, rest]; // error
   } else if (m = (/^#t/).exec(str)) {
@@ -57,18 +70,26 @@ function readFromString(str) {
     return ["close-paren", ")", str.slice(1)];
   } else if (m = (/^;.*(\n|$)/).exec(str)) { // コメントを読み飛ばす。
     return readFromString(str.slice(m[0].length));
-  } else if (m = (/^-?[0-9]+\.[0-9]+/).exec(str)) {
-    return ["sexp", parseFloat(m[0]), str.slice(m[0].length)];
-  } else if (m = (/^-?[0-9]+/).exec(str)) {
-    return ["sexp", parseInt(m[0]), str.slice(m[0].length)];
+  } else if (m = (/^(-?[0-9]+\.[0-9]+)/).exec(str)) {
+    return ["sexp", parseFloat(m[1]), str.slice(m[0].length)];
+  } else if (m = (/^(-?[0-9]+)/).exec(str)) {
+    return ["sexp", parseInt(m[1], 10), str.slice(m[0].length)];
+  } else if (m = (/^#d(-?[0-9]+)/).exec(str)) {
+    return ["sexp", parseInt(m[1], 10), str.slice(m[0].length)];
+  } else if (m = (/^#x(-?[0-9a-fA-F]+)/).exec(str)) {
+    return ["sexp", parseInt(m[1], 16), str.slice(m[0].length)];
+  } else if (m = (/^#o(-?[0-7]+)/).exec(str)) {
+    return ["sexp", parseInt(m[1], 8), str.slice(m[0].length)];
   } else if (m = (/^\s+/).exec(str)) {
     return readFromString(str.slice(m[0].length));
   } else if (m = (/^"([^"]*)"/).exec(str)) { // バックスラッシュエスケープ実装してない。
-    return ["sexp", eval("\"" + m[1] + "\""), str.slice(m[0].length)];
+    return ["sexp", new MutableString(eval("\"" + m[1] + "\"")), str.slice(m[0].length)];
+  } else if (m = (/^#\\(.[^()\s]*)/).exec(str)) {
+    return ["sexp", readCharacterLiteral(m[1]), str.slice(m[0].length)];
   } else if (m = (/^[^\s\(\)]+/).exec(str)) {
     // 新しいSchemeではケースの正規化をしないようだから、小文字化は
     // 必要ないか？
-    return ["sexp", intern(m[0]), str.slice(m[0].length)];
+    return ["sexp", m[0], str.slice(m[0].length)];
   } else {
     return ["error", 'parse error', str];
   }
@@ -132,6 +153,8 @@ function inspect(val) {
     }
     str += ")";
     return str;
+  } else if (val instanceof MutableString) {
+    return JSON.stringify(val.toString());
   } else {
     return "" + val; // stringify in the JavaScript way
   }
@@ -141,13 +164,17 @@ window.addEventListener('load', () => {
   var kbdBuffer = "";
 
   var print = function (val) {
-    var str = inspect(val);
-    for (var ch of str)
-      ttyOutputPort.writeChar(ch);
+    display(val);
     ttyOutputPort.writeChar("\n");
   };
   var display = function(val) {
-    var str = inspect(val);
+    var str;
+    if (val instanceof Character)
+      str = val.value;
+    else if (val instanceof MutableString)
+      str = val.toString();
+    else
+      str = inspect(val);
     for (var ch of str)
       ttyOutputPort.writeChar(ch);
   };
@@ -312,135 +339,183 @@ window.addEventListener('load', () => {
   }
   var ttyOutputPort = new TtyOutputPort;
 
+  function eqv(a, b) {
+    if (a instanceof Character && b instanceof Character) {
+      if (a.value === b.value) 
+        return true;
+      else
+        return false;
+    } else {
+      return a === b;
+    }
+  }
+
+  function equal(a, b) {
+    if (a instanceof Pair && b instanceof Pair) {
+      return equal(a.first, b.first) && equal(a.second, b.second);
+    } else if (a instanceof Array && b instanceof Array) {
+      if (a.length !== b.length) return false;
+      for (var i = 0; i < a.length; i++) {
+        if (!equal(a[i], b[i]))
+          return false;
+      }
+      return true;
+    } else if (a instanceof MutableString && b instanceof MutableString) {
+      return a.toString() === b.toString(); // ズルする。
+    } else {
+      return eqv(a, b);
+    }
+  }
+
   function makeInitenv(vm) {
     var initenv = [
-      [intern("current-input-port"), function () {
+      ["current-input-port", function () {
         return ttyInputPort;
       }],
-      [intern("current-output-port"), function () {
+      ["current-output-port", function () {
         return ttyOutputPort;
       }],
-      [intern("input-port?"), function (port) {
+      ["input-port?", function (port) {
         return port.isInputPort();
       }],
-      [intern("char-ready?"), function (port) {
+      ["char-ready?", function (port) {
         port = port || ttyInputPort;
         return port.isCharReady();
       }],
-      [intern("read-char-nonblock"), function (port) {
+      ["read-char-nonblock", function (port) {
         port = port || ttyInputPort;
         if (port.isCharReady()) {
-          return port.readChar();
+          return new Character(port.readChar());
         } else {
           return null;
         }
       }],
-      [intern("write-char"), function () {
-        var ch = arguments[0];
+      ["write-char", function () {
+        var ch = ""+arguments[0];
         var port = arguments[1] || ttyOutputPort;
 
         port.writeChar(ch);
-        return intern("ok");
+        return "ok";
       }],
-      [intern("newline"), function (port) {
+      ["newline", function (port) {
         port = port || ttyOutputPort;
 
         port.writeChar("\x0d");
         port.writeChar("\x0a");
-        return intern("ok");
+        return "ok";
       }],
-      [intern("car"), function(pair) { return pair.first;  }],
-      [intern("cdr"), function(pair) { return pair.second;  }],
-      [intern("p"), function(val) {
+      ["car", function(pair) { return pair.first;  }],
+      ["cdr", function(pair) { return pair.second;  }],
+      ["p", function(val) {
         var str = (""+val) + "\n";
         receiver.feed(str.replace(/\n/, "\r\n"));
         force_redraw = true
       }],
-      [intern("print"), print],
-      [intern("display"), display],
-      [intern("+"), function() {
+      ["print", print],
+      ["display", display],
+      ["write", function(obj) { display(inspect(obj)); }],
+      ["+", function() {
         var sum = 0;
         for (var elt of arguments) { sum += elt; }
         return sum;
       }],
-      [intern("str"), function() {
+      ["str", function() {
         var sum = "";
         for (var elt of arguments) { sum += elt; }
-        return sum;
+        return new MutableString(sum);
       }],
-      [intern("getch"), function() {
+      ["getch", function() {
         if (kbdBuffer.length > 0) {
-          var res = kbdBuffer[0];
+          var ch = kbdBuffer[0];
           kbdBuffer = kbdBuffer.slice(1);
-          return res;
+          return new Character(ch);
         } else {
           return null;
         }
       }],
-      [intern("null?"), function(v) {
+      ["null?", function(v) {
         return (v === null);
       }],
-      [intern("random"), function(n) {
+      ["random", function(n) {
         return Math.floor(Math.random() * n);
       }],
-      [intern("eq?"), function(a, b) {
+      ["eq?", function(a, b) {
         return a === b;
       }],
-      [intern("read-from-string"), function(str) {
-        var res = readFromString(str);
+      ["eqv?", eqv],
+      ["equal?", equal],
+      ["read-from-string", function(str) {
+        var res = readFromString(""+str);
         console.log(res);
         return res[1];
       }],
-      [intern("undefined"), function(str) {
+      ["undefined", function(str) {
         return undefined;
       }],
-      [intern("spawn"), spawnProgram],
-      [intern("exit"), function () {
+      ["spawn", spawnProgram],
+      ["exit", function () {
         vms.pop();
       }],
-      [intern("list"), list],
-      [intern("sys-list-files"), function () {
-        return list.apply(null, Object.keys($ASSETS));
+      ["list", list],
+      ["sys-list-files", function () {
+        return list.apply(null, Object.keys($ASSETS).map(s => new MutableString(s)));
       }],
-      [intern("sys-get-file-contents"), function (filename) {
-        return $ASSETS[filename];
+      ["sys-get-file-contents", function (filename) {
+        return new MutableString($ASSETS[filename]);
       }],
-      [intern("sys-put-file-contents"), function (filename, contents) {
-        $ASSETS[filename] = contents;
-        return intern("ok");
+      ["sys-put-file-contents", function (filename, contents) {
+        $ASSETS[filename] = contents.toString();
+        return "ok";
       }],
-      [intern("split"), function (exp, str) {
+      ["split", function (exp, str) {
         var r = new RegExp(exp);
-        return list.apply(null, str.split(r));
+        return list.apply(null, str.toString().split(r).map(s => new MutableString(s)));
       }],
-      [intern("cons"), cons],
-      [intern("append"), append],
-      [intern("symbol?"), function (v) { return v instanceof Symbol; }],
-      [intern("symbol->string"), function (sym) { return sym.name; }],
-      [intern("string?"), function (v) { return typeof(v) === "string"; }],
-      [intern("string-length"), function(s) { return s.length; }],
-      [intern("substring"), function(s, start, end) { return s.substr(start, end); }],
-      [intern("string-append"), function() { return Array.from(arguments).join(""); }],
-      [intern("wcwidth"), wcwidth],
-      [intern("string-ref"), function (s, k) { return s[k]; }],
-      [intern("eof-object"), function() { return new EndOfFile; }],
-      [intern("eof-object?"), function(v) { return v instanceof EndOfFile; }],
-      [intern("negate"), function (v) { return -v; }],
-      [intern("number->string"), function (n) { return ""+n; }],
-      [intern("<"), function (a, b) { return a < b; }],
-      [intern(">"), function (a, b) { return a > b; }],
-      [intern("<="), function (a, b) { return a <= b; }],
-      [intern(">="), function (a, b) { return a >= b; }],
-      [intern("="), function (a, b) { return a === b; }],
-      [intern("string->symbol"), intern],
-      [intern("vector?"),function(vector){ return vector instanceof Array;}],
-      [intern("make-vector"),function(k, fill){ return new Array(k).fill(fill); }],
-      [intern("vector"),function(){return Array.from(arguments);}],
-      [intern("vector-length"),function(vector){return vector.length;}],
-      [intern("vector-ref"),function(vector, k){return vector[k];}],
-      [intern("vector-set!"),function(vector, k, obj){vector[k] = obj; return intern("ok")}],
-      [intern("vector->list"),function(vector){return list.apply(null, vector);}],
-      [intern("list->vector"),function(ls){
+      ["cons", cons],
+      ["append", append],
+      ["symbol?", function (v) { return typeof(v) === "string"; }],
+      ["symbol->string", function (sym) { return new MutableString(sym); }],
+      ["string?", function (v) { return v instanceof MutableString; }],
+      ["string=?", function (a,b) {
+        if (!(a instanceof MutableString)) { throw new Error("string=?: string required: " + inspect(a)); }
+        if (!(b instanceof MutableString)) { throw new Error("string=?: string required: " + inspect(b)); }
+        return (a.toString() === b.toString());
+      }],
+      ["string-length", function(s) { return s.toString().length; }],
+      ["substring", function(s, start, end) {
+        return new MutableString(s.toString().substr(start, end));
+      }],
+      ["string-append", function() {
+        return new MutableString(
+          Array.from(arguments).map(ms => {
+            if (!(ms instanceof MutableString))
+              throw new Error("string-append: mutable string required");
+            return ms.toString()
+          }).join("")
+        );
+      }],
+      ["wcwidth", function(c) { return wcwidth(c.value); }],
+      ["string-ref", function (s, k) {
+        return s.buffer[k];
+      }],
+      ["eof-object", function() { return new EndOfFile; }],
+      ["eof-object?", function(v) { return v instanceof EndOfFile; }],
+      ["negate", function (v) { return -v; }],
+      ["number->string", function (n) { return new MutableString(""+n); }],
+      ["<", function (a, b) { return a < b; }],
+      [">", function (a, b) { return a > b; }],
+      ["<=", function (a, b) { return a <= b; }],
+      [">=", function (a, b) { return a >= b; }],
+      ["=", function (a, b) { return a === b; }],
+      ["string->symbol", function(s) { return s.toString(); }],
+      ["vector?",function(vector){ return vector instanceof Array;}],
+      ["make-vector",function(k, fill){ return new Array(k).fill(fill); }],
+      ["vector",function(){return Array.from(arguments);}],
+      ["vector-length",function(vector){return vector.length;}],
+      ["vector-ref",function(vector, k){return vector[k];}],
+      ["vector-set!",function(vector, k, obj){vector[k] = obj; return "ok"}],
+      ["vector->list",function(vector){return list.apply(null, vector);}],
+      ["list->vector",function(ls){
         var res = [];
         while (ls !== null) {
           res.push(ls.first);
@@ -448,23 +523,37 @@ window.addEventListener('load', () => {
         }
         return res;
       }],
-      [intern("vector-fill!"),function(vector, fill){vector.fill(fill); return intern("ok");}],
-      [intern("vector-splice!"), function() {
+      ["vector-fill!",function(vector, fill){vector.fill(fill); return "ok";}],
+      ["vector-splice!", function() {
         var vector = arguments[0];
         var args = Array.from(arguments).slice(1);
         vector.splice.apply(vector, args);
-        return intern("ok");
+        return "ok";
       }],
-      [intern("error"), function(message){ throw new Error(message); }],
-      [intern("pair?"), function(val){ return val instanceof Pair; }],
-      [intern("string-take"), function(str, n) { return str.slice(0, n); }],
-      [intern("char->integer"), function(c) { return c.codePointAt(0); }],
-      [intern("integer->char"), function(n) { return String.fromCodePoint(n); }],
-      [intern("sys-time"), function() { return (+new Date) / 1000; }],
-      [intern("list->string"), function(ls) {
-        return array(ls).join("");
+      ["error", function(message){ throw new Error(message); }],
+      ["pair?", function(val){ return val instanceof Pair; }],
+      ["string-take", function(str, n) { return new MutableString(str.toString().slice(0, n)); }],
+      ["char->integer", function(c) {
+        if (!(c instanceof Character)) throw new Error("char->integer: character required");
+        return c.value.codePointAt(0);
       }],
-      [intern("string->number"), function (str) { return +str; }],
+      ["integer->char", function(n) { return new Character(String.fromCodePoint(n)); }],
+      ["sys-time", function() { return (+new Date) / 1000; }],
+      ["list->string", function(ls) {
+        return new MutableString(array(ls).map(c => c.value).join(""));
+      }],
+      ["string->number", function (str) { return +str; }],
+      ["char?", function(v) { return v instanceof Character; }],
+      ["char=?", function(a,b) {
+        if (!(a instanceof Character)) throw new Error("char=?: character required");
+        if (!(b instanceof Character)) throw new Error("char=?: character required");
+        return a.value == b.value;
+      }],
+      ["string", function() {
+        return new MutableString(
+          Array.from(arguments).map(c => c.value).join("")
+        );
+      }],
     ];
     return initenv;
   }
@@ -478,20 +567,20 @@ window.addEventListener('load', () => {
     for (var [key, value] of initenv) {
       env.define_variable(key, value);
     }
-    env.define_variable(intern("*argv*"), argv);
+    env.define_variable("*argv*", argv);
 
     vm.env = env;
     vm.interaction_env = env;
 
     var seq = code_to_sequence($ASSETS["startup.scm"]);
-    vm.exp = cons(intern("begin"), seq);
+    vm.exp = cons("begin", seq);
 
     vm.pc = vm.eval_dispatch;
     while (vm.pc)
       vm.step();
 
     var code = code_to_sequence($ASSETS[filename]);
-    vm.exp = cons(intern("begin"), code);
+    vm.exp = cons("begin", code);
     vm.pc = vm.eval_dispatch;
 
     return vm;
@@ -502,11 +591,11 @@ window.addEventListener('load', () => {
 
   function spawnProgram(filename) {
     if ($ASSETS[filename] === undefined) {
-      return intern("no-such-file");
+      return "no-such-file";
     } else {
       var argv = list.apply(null, Array.from(arguments).slice(1));
       vms.push(loadProgram(filename, argv));
-      return intern("ok");
+      return "ok";
     }
   }
 
@@ -538,12 +627,12 @@ window.addEventListener('load', () => {
               setTimeout(() => {
                 vm.syscall = null;
                 vm.pc = vm.continue;
-                vm.val = intern("ok");
+                vm.val = "ok";
               }, 1000 * vm.syscall[1]);
             } else {
               vm.syscall = null;
               vm.pc = vm.continue;
-              vm.val = intern("error-unknown-syscall");
+              vm.val = "error-unknown-syscall";
             }
             break;
           }
@@ -555,8 +644,8 @@ window.addEventListener('load', () => {
             ttyOutputPort.writeChar(ch);
           ttyOutputPort.writeChar("\n");
           dumpFrames(vm.env);
-          if (vm.env.has_variable(intern('*resume-from-error*'))) {
-            var c = vm.env.lookup_variable(intern('*resume-from-error*'));
+          if (vm.env.has_variable("*resume-from-error*")) {
+            var c = vm.env.lookup_variable("*resume-from-error*");
             vm.restore_from_continuation(c);
           } else {
             // terminate this process.

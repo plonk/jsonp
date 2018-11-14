@@ -8,8 +8,8 @@
          (let ((ch (read-char)))
            ;; erase entire line and jump to column 0
            (display "\x1b[2K\r")
-           (cond ((eq? ch "q") 'done)
-                 ((eq? ch " ")
+           (cond ((char=? ch #\q) 'done)
+                 ((char=? ch #\space)
                   (iter lines 0))
                  (else
                   (iter lines (- index 1))))))))
@@ -23,10 +23,10 @@
         (print "Usage: more FILENAME")
         (exit)))
   (let ((buffer (sys-get-file-contents (car *argv*))))
-    (if (eq? "" buffer)
+    (if (string=? "" buffer)
         (exit)
         (let ((lines (split "\\n" buffer)))
-          (if (eq? "\n" (string-ref buffer (- (string-length buffer) 1)))
+          (if (char=? #\newline (string-ref buffer (- (string-length buffer) 1)))
               (set! lines (but-last lines)))
           (iter lines 0)))))
 

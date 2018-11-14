@@ -1,29 +1,32 @@
-$SYMBOLS = {};
-
 class EndOfFile {
   toString() {
     return "#<eof>";
   }
 }
 
-class Symbol {
-  constructor(name) {
-    if ($SYMBOLS.hasOwnProperty(name))
-      throw new Error(`symbol ${name} already interned`);
-
-    this.name = name;
+class Character {
+  constructor(ch) {
+    this.value = ch;
   }
 
   toString() {
-    return this.name;
+    switch (this.value) {
+    case " ": return "#\\space";
+    case "\n": return "#\\newline";
+    default:
+      return "#\\" + this.value;
+    }
   }
 }
 
-function intern(name) {
-  if ($SYMBOLS[name] === undefined)
-    $SYMBOLS[name] = new Symbol(name);
+class MutableString {
+  constructor(jsString) {
+    this.buffer = Array.from(jsString).map(c => new Character(c));
+  }
 
-  return $SYMBOLS[name];
+  toString() {
+    return this.buffer.map(c => c.value).join("");
+  }
 }
 
 class AssocList {
@@ -67,10 +70,10 @@ class AssocList {
 }
 
 var a = new AssocList();
-console.log(a.hasKey(intern("x")));
-a.put(intern("x"), 123);
-console.log(a.hasKey(intern("x")));
-console.log(a.lookupValue(intern("x")));
+console.log(a.hasKey("x"));
+a.put("x", 123);
+console.log(a.hasKey("x"));
+console.log(a.lookupValue("x"));
 
 class Frame {
   constructor(parent) {
@@ -116,13 +119,13 @@ class Frame {
 }
 
 var f = new Frame();
-//console.log(f.lookup_variable(intern("x")));
-f.define_variable(intern("x"), 999);
-console.log(f.lookup_variable(intern("x")));
+//console.log(f.lookup_variable("x"));
+f.define_variable("x", 999);
+console.log(f.lookup_variable("x"));
 var g = new Frame(f);
-console.log(g.lookup_variable(intern("x")));
-g.define_variable(intern("x"), 1);
-console.log(g.lookup_variable(intern("x")));
+console.log(g.lookup_variable("x"));
+g.define_variable("x", 1);
+console.log(g.lookup_variable("x"));
 
 class Pair {
   constructor(first, second) {
@@ -161,7 +164,7 @@ function list() {
 }
 
 // console.log(list(1, 2, 3));
-// console.log(list(intern("p"), 1));
+// console.log(list("p", 1));
 
 function append(xs, ys) {
   if (xs === null) {
@@ -265,50 +268,68 @@ class VM {
 
   // 式タイプ判別関数：
 
-  is_self_evaluating(exp) {
-    if ( (exp instanceof Pair) ||
-         (exp instanceof Symbol) )
-      return false;
-    else
-      return true
-  }
-
   is_variable(exp) {
-    return (exp instanceof Symbol);
+    return (typeof(exp) === "string");
   }
 
   is_quoted(exp) {
-    return (exp instanceof Pair) &&
-      (exp.first === intern("quote"));
+    return (exp.first === "quote");
   }
 
   is_assignment(exp) {
-    return (exp instanceof Pair) &&
-      (exp.first === intern("set!"));
+    return (exp.first === "set!");
   }
 
   is_definition(exp) {
-    return (exp instanceof Pair) &&
-      (exp.first === intern("define"));
+    return (exp.first === "define");
   }
 
   is_if(exp) {
-    return (exp instanceof Pair) &&
-      (exp.first === intern("if"));
+    return (exp.first === "if");
   }
 
   is_lambda(exp) {
-    return (exp instanceof Pair) &&
-      (exp.first === intern("lambda"));
+    return (exp.first === "lambda");
   }
 
   is_begin(exp) {
-    return (exp instanceof Pair) &&
-      (exp.first === intern("begin"));
+    return (exp.first === "begin");
   }
 
   is_application(exp) {
     return exp instanceof Pair;
+  }
+
+  is_eval(pair) {
+    return (pair.first === "eval");
+  }
+
+  is_make_cont(pair) {
+    return pair.first === "make-continuation";
+  }
+
+  is_let(pair) {
+    return pair.first === "let";
+  }
+
+  is_when(pair) {
+    return pair.first === "when";
+  }
+
+  is_cond(pair) {
+    return pair.first === "cond";
+  }
+
+  is_or(pair) {
+    return pair.first === "or";
+  }
+
+  is_and(pair) {
+    return pair.first === "and";
+  }
+
+  is_syscall(pair) {
+    return pair.first === "syscall";
   }
 
   //
@@ -497,7 +518,7 @@ class VM {
   }
 
   ev_definition() {
-    if (this.exp.second.first instanceof Symbol) {
+    if (typeof(this.exp.second.first) === "string") {
       this.save(this.exp.second.first) // name
       this.exp = this.exp.second.second.first
       this.save(this.env)
@@ -506,7 +527,7 @@ class VM {
       this.goto(this.eval_dispatch);
     } else if (this.exp.second.first instanceof Pair) { // procedure definition
       this.save(this.exp.second.first.first); // name
-      this.exp = cons(intern("lambda"), cons(this.exp.second.first.second, this.exp.second.second));
+      this.exp = cons("lambda", cons(this.exp.second.first.second, this.exp.second.second));
       this.save(this.env);
       this.save(this.continue);
       this.continue = this.ev_definition_2;
@@ -521,7 +542,7 @@ class VM {
     this.env = this.restore()
     var name = this.restore()
     this.env.define_variable(name, this.val)
-    this.val = intern("ok")
+    this.val = "ok"
     this.goto(this.continue);
   }
 
@@ -529,9 +550,9 @@ class VM {
     this.continue = this.restore()
     this.env = this.restore()
     var name = this.restore()
-    this.val.name = name.name;
+    this.val.name = name;
     this.env.define_variable(name, this.val)
-    this.val = intern("ok")
+    this.val = "ok"
     this.goto(this.continue);
   }
 
@@ -587,13 +608,8 @@ class VM {
     this.env = this.restore();
     var name = this.restore();
     this.env.assign_variable(name, this.val);
-    this.val = intern("ok");
+    this.val = "ok";
     this.goto(this.continue);
-  }
-
-  is_eval(exp) {
-    return (exp instanceof Pair) &&
-      (exp.first === intern("eval"));
   }
 
   // eval の呼び出し。
@@ -616,49 +632,29 @@ class VM {
     this.goto(this.continue);
   }
 
-  is_make_cont(exp) {
-    return (exp instanceof Pair) &&
-      exp.first === intern("make-continuation");
-  }
-
   ev_make_cont() {
     this.val = this.make_continuation();
     this.goto(this.continue);
-  }
-
-  is_let(exp) {
-    return (exp instanceof Pair) &&
-      exp.first === intern("let");
   }
 
   ev_let() {
     // (let ((a x) (b y) (c z)) BODY)
     // ((lambda (a b c) BODY) x y z)
     var ls = transpose(this.exp.second.first);
-    console.log(inspect(ls));
+    // console.log(inspect(ls));
     var params = ls.first;
     var args = ls.second.first;
     var body = this.exp.second.second;
-    this.exp = cons(append(list(intern("lambda"), params), body),
+    this.exp = cons(append(list("lambda", params), body),
                     args);
-    console.log(inspect(this.exp));
+    // console.log(inspect(this.exp));
     this.pc = this.ev_application;
   }
 
-  is_when(exp) {
-    return (exp instanceof Pair) &&
-      exp.first === intern("when");
-  }
-
   ev_when() {
-    this.exp = list(intern("if"), this.exp.second.first,
-                    cons(intern("begin"), this.exp.second.second));
+    this.exp = list("if", this.exp.second.first,
+                    cons("begin", this.exp.second.second));
     this.goto(this.eval_dispatch);
-  }
-
-  is_cond(exp) {
-    return (exp instanceof Pair) &&
-      exp.first === intern("cond");
   }
 
   expand_cond_clauses(exp) {
@@ -671,11 +667,11 @@ class VM {
         throw new Error("expand_cond_clauses: malformed clause");
       }
 
-      if (clause.first === intern("else")) {
-        return cons(intern("begin"), clause.second);
+      if (clause.first === "else") {
+        return cons("begin", clause.second);
       } else {
-        return list(intern("if"), clause.first,
-                    cons(intern("begin"), clause.second),
+        return list("if", clause.first,
+                    cons("begin", clause.second),
                     this.expand_cond_clauses(exp.second));
       }
     }
@@ -686,22 +682,12 @@ class VM {
     this.goto(this.eval_dispatch);
   }
 
-  is_or(exp) {
-    return (exp instanceof Pair) &&
-      exp.first === intern("or");
-  }
-
-  is_and(exp) {
-    return (exp instanceof Pair) &&
-      exp.first === intern("and");
-  }
-
   expand_and(terms) {
     if (terms.second === null) { // last term
-      return list(intern("let"), list(list(intern("x"), terms.first)),
-                  list(intern("if"), intern("x"), intern("x"), false));
+      return list("let", list(list("x", terms.first)),
+                  list("if", "x", "x", false));
     } else {
-      return list(intern("if"), terms.first,
+      return list("if", terms.first,
                   this.expand_and(terms.second),
                   false);
     }
@@ -751,11 +737,6 @@ class VM {
     }
   }
 
-  is_syscall(exp) {
-    return (exp instanceof Pair) &&
-      exp.first === intern("syscall");
-  }
-
   syscall_handler() {
     this.syscall = Array.from(arguments);
   }
@@ -772,8 +753,6 @@ class VM {
   }
 
   ev_syscall_did_operator() {
-    console.log("s_did_operator");
-
     this.unev = this.restore();
     this.env = this.restore(); // ???
 
@@ -789,25 +768,28 @@ class VM {
   }
 
   eval_dispatch() {
-         if (this.is_self_evaluating(this.exp)) this.goto(this.ev_self_eval);
-    else if (this.is_variable(this.exp)       ) this.goto(this.ev_variable);
-    else if (this.is_quoted(this.exp)         ) this.goto(this.ev_quoted);
-    else if (this.is_assignment(this.exp)     ) this.goto(this.ev_assignment);
-    else if (this.is_definition(this.exp)     ) this.goto(this.ev_definition);
-    else if (this.is_if(this.exp)             ) this.goto(this.ev_if);
-    else if (this.is_when(this.exp)           ) this.goto(this.ev_when);
-    else if (this.is_cond(this.exp)           ) this.goto(this.ev_cond);
-    else if (this.is_lambda(this.exp)         ) this.goto(this.ev_lambda);
-    else if (this.is_begin(this.exp)          ) this.goto(this.ev_begin);
-    else if (this.is_eval(this.exp)           ) this.goto(this.ev_eval);
-    else if (this.is_make_cont(this.exp)      ) this.goto(this.ev_make_cont);
-    else if (this.is_let(this.exp)            ) this.goto(this.ev_let);
-    else if (this.is_and(this.exp)            ) this.goto(this.ev_and);
-    else if (this.is_or(this.exp)             ) this.goto(this.ev_or);
-    else if (this.is_syscall(this.exp)        ) this.goto(this.ev_syscall);
-    else if (this.is_application(this.exp)    ) this.goto(this.ev_application);
-    else
-      this.goto(this.unknown_expression_type);
+    if (this.exp instanceof Pair) {
+      if (this.is_quoted(this.exp)         ) this.goto(this.ev_quoted);
+      else if (this.is_assignment(this.exp)) this.goto(this.ev_assignment);
+      else if (this.is_definition(this.exp)) this.goto(this.ev_definition);
+      else if (this.is_if(this.exp)        ) this.goto(this.ev_if);
+      else if (this.is_when(this.exp)      ) this.goto(this.ev_when);
+      else if (this.is_cond(this.exp)      ) this.goto(this.ev_cond);
+      else if (this.is_lambda(this.exp)    ) this.goto(this.ev_lambda);
+      else if (this.is_begin(this.exp)     ) this.goto(this.ev_begin);
+      else if (this.is_eval(this.exp)      ) this.goto(this.ev_eval);
+      else if (this.is_make_cont(this.exp) ) this.goto(this.ev_make_cont);
+      else if (this.is_let(this.exp)       ) this.goto(this.ev_let);
+      else if (this.is_and(this.exp)       ) this.goto(this.ev_and);
+      else if (this.is_or(this.exp)        ) this.goto(this.ev_or);
+      else if (this.is_syscall(this.exp)   ) this.goto(this.ev_syscall);
+      else
+        this.goto(this.ev_application);
+    } else if (this.is_variable(this.exp)) {
+      this.goto(this.ev_variable);
+    } else {
+      this.goto(this.ev_self_eval);
+    }
   }
 }
 

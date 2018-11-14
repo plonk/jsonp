@@ -8,35 +8,35 @@
 (define *old-screen-top* #f)
 (define *command-mode-table*
   (list
-   (list "\x0c" (lambda ()
-                  (clear-command-line)
-                  (set! *old-screen-top* #f)))
+   (list (integer->char #x0c) (lambda ()
+                                (clear-command-line)
+                                (set! *old-screen-top* #f)))
 
-   (list "O" (lambda () ;; 上に行を追加
+   (list #\O (lambda () ;; 上に行を追加
                (clear-command-line)
                (vector-splice! *buffer* *posy* 0 "")
                (set! *old-screen-top* #f)))
 
-   (list "o" (lambda () ;; 下に行を追加
+   (list #\o (lambda () ;; 下に行を追加
                (clear-command-line)
                (vector-splice! *buffer* (+ 1 *posy*) 0 "")
                (set! *posy* (+ 1 *posy*))
                (minimum-scroll)
                (set! *old-screen-top* #f)))
 
-   (list "\x07" (lambda (n)
+   (list (integer->char #x07) (lambda (n)
                   (move-cursor 23 0)
                   (clear-command-line)
                   (display (str *filename* ": line " (+ 1 *posy*) " of " (vector-length *buffer*)))))
 
-   (list "G" (lambda (n) ;; ファイルの最後に移動
+   (list #\G (lambda (n) ;; ファイルの最後に移動
                (clear-command-line)
                (if n
                    (set! *posy* (min (- n 1) (- (vector-length *buffer*) 1)))
                    (set! *posy* (- (vector-length *buffer*) 1)))
                (minimum-scroll)))
 
-   (list "d" (lambda () ;; 行削除
+   (list #\d (lambda () ;; 行削除
                (clear-command-line)
                (vector-splice! *buffer* *posy* 1)
                (if (zero? (vector-length *buffer*))
@@ -44,7 +44,7 @@
                (set! *posy* (min *posy* (- (vector-length *buffer*) 1)))
                (set! *old-screen-top* #f)))
 
-   (list "x" (lambda () ;; 文字削除
+   (list #\x (lambda () ;; 文字削除
                (clear-command-line)
                (let ((current-line (vector-ref *buffer* *posy*)))
                  (if (and (> (string-length current-line) 0)
@@ -58,16 +58,16 @@
                        (set! *posx* (min *posx* (- (string-length new-line) 1))))
                      (beep)))))
 
-   (list "i" (lambda ()
+   (list #\i (lambda ()
                (clear-command-line)
                (set! *input-mode* #t)))
 
-   (list "a" (lambda ()
+   (list #\a (lambda ()
                (clear-command-line)
                (set! *input-mode* #t)
                (set! *posx* (min (+ 1 *posx*) (string-length (vector-ref *buffer* *posy*))))))
 
-   (list "j" (lambda (n)
+   (list #\j (lambda (n)
                (set! n (or n 1))
                (clear-command-line)
                (let ((target (min (+ n *posy*) (- (vector-length *buffer*) 1))))
@@ -77,7 +77,7 @@
                      (set! *posy* target)
                      (minimum-scroll)
                      (clamp-posx!))))))
-   (list "k" (lambda (n)
+   (list #\k (lambda (n)
                (set! n (or n 1))
                (clear-command-line)
                (let ((target (max (- *posy* n) 0)))
@@ -88,7 +88,7 @@
                        (minimum-scroll)
                        (clamp-posx!))))))
 
-   (list "l" (lambda (n)
+   (list #\l (lambda (n)
                (set! n (or n 1))
                (clear-command-line)
                (let ((target (min (+ n *posx*) (- (string-length (vector-ref *buffer* *posy*)) 1))))
@@ -96,7 +96,7 @@
                    (beep)
                    (set! *posx* target)))))
 
-   (list "h" (lambda (n)
+   (list #\h (lambda (n)
                (set! n (or n 1))
                (clear-command-line)
                (let ((target (max (- *posx* n) 0)))
@@ -104,28 +104,28 @@
                      (beep)
                      (set! *posx* target)))))
 
-   (list "^" (lambda ()
+   (list #\^ (lambda ()
                (clear-command-line)
                (set! *posx* 0)))
-   (list "$" (lambda ()
+   (list #\$ (lambda ()
                (clear-command-line)
                (set! *posx*
                      (max 0 (- (string-length (vector-ref *buffer* *posy*)) 1)))))
 
-   (list ":" (lambda ()
+   (list #\: (lambda ()
                (clear-command-line)
                (move-cursor 23 0)
                (display ":")
                (let ((cmd (read-line)))
                  (cond
-                  ((eq? cmd "q")
+                  ((string=? cmd "q")
                    (set! *quitting* #t))
-                  ((eq? cmd "w")
+                  ((string=? cmd "w")
                    (save-buffer *filename*))
-                  ((eq? cmd "wq")
+                  ((string=? cmd "wq")
                    (save-buffer *filename*)
                    (set! *quitting* #t))
-                  ((eq? cmd "")
+                  ((string=? cmd "")
                    (display "\r")
                    (clear-line))
                   (#t
@@ -197,18 +197,30 @@
 (define (cr)
   (display "\r"))
 
+;; (define (string-take-col str maxcol)
+;;   (define (iter i acc acc-width)
+;;     (if (< i (string-length str))
+;;         (let ((ch (string-ref str i)))
+;;           (cond
+;;            ((> (+ acc-width  (wcwidth ch)) maxcol)
+;;             acc)
+;;            (#t
+;;             (iter (+ 1 i) (string-append acc (string ch)) (+ acc-width (wcwidth ch))))
+;;           ))
+;;         acc))
+;;   (iter 0 "" 0))
 (define (string-take-col str maxcol)
-  (define (iter i acc acc-width)
+  (define (count-chars i)
     (if (< i (string-length str))
         (let ((ch (string-ref str i)))
           (cond
-           ((> (+ acc-width  (wcwidth ch)) maxcol)
-            acc)
+           ((> (+ i (wcwidth ch)) maxcol)
+            i)
            (#t
-            (iter (+ 1 i) (string-append acc ch) (+ acc-width (wcwidth ch))))
+            (count-chars (+ 1 i)))
           ))
-        acc))
-  (iter 0 "" 0))
+        i))
+  (substring str 0 (count-chars 0)))
 
 (define (render-line line)
   ;; erase entire line and jump to column 0
@@ -266,11 +278,11 @@
                   (set! visline-width 0)
                   (iter i))
                 (begin
-                  (set! visline (string-append visline (string-ref line i)))
+                  (set! visline (string-append visline (string (string-ref line i))))
                   (set! visline-width (+ w visline-width))
                   (iter (+ 1 i)))))
           (begin
-            (if (not (eq? visline ""))
+            (if (not (string=? visline ""))
                 (set! pages (cons visline pages)))
             (if (or (null? pages)
                     (= (columns (car pages)) screen-width))
@@ -384,23 +396,23 @@
 
 (define (read-command)
   (define (parse-prefix prefix)
-    (if (eq? "" prefix)
+    (if (string=? "" prefix)
         #f
         (string->number prefix)))
   (define (iter prefix)
     (let ((key (read-char)))
       (cond
-       ((or (and (not (eq? prefix "")) (eq? key "0"))
-            (eq? key "1")
-            (eq? key "2")
-            (eq? key "3")
-            (eq? key "4")
-            (eq? key "5")
-            (eq? key "6")
-            (eq? key "7")
-            (eq? key "8")
-            (eq? key "9"))
-        (iter (string-append prefix key)))
+       ((or (and (not (string=? prefix "")) (char=? key #\0))
+            (char=? key #\1)
+            (char=? key #\2)
+            (char=? key #\3)
+            (char=? key #\4)
+            (char=? key #\5)
+            (char=? key #\6)
+            (char=? key #\7)
+            (char=? key #\8)
+            (char=? key #\9))
+        (iter (string-append prefix (string key))))
        (#t
         (let ((entry (assoc key *command-mode-table*)))
           (if entry
@@ -439,7 +451,7 @@
     'done
     (command-loop)))
 
-(if (or (null? *argv*) (eq? "" (car *argv*)))
+(if (or (null? *argv*) (string=? "" (car *argv*)))
     (begin
       (print "Filename required")
       (exit)))

@@ -4,7 +4,7 @@
 (define (assoc key ls)
   (if (null? ls)
       #f
-      (if (eq? key (car (car ls)))
+      (if (equal? key (car (car ls)))
           (car ls)
           (assoc key (cdr ls)))))
 
@@ -60,7 +60,8 @@
 (define (read-line . args)
   (define port #f)
   (define (caret-notate c)
-    (string-append "^" (integer->char (+ (char->integer c) 64))))
+    (string-append "^" (string
+                        (integer->char (+ (char->integer c) 64)))))
   (define (char-display-width c)
     (if (char-control? c)
         2
@@ -68,54 +69,75 @@
   (define (char-display c)
     (if (char-control? c)
         (string-append "\x1b[35m" (caret-notate c) "\x1b[0m")
-        c))
+        (string c)))
   (define line "")
   (define ch (undefined))
   (define (loop)
     (set! ch (read-char port))
-    (cond ((eq? ch "\x0a") ; RETURN
-           (write-char ch (current-output-port))
+    (cond ((char=? ch (integer->char #x0a)) ; RETURN
+           (display ch (current-output-port))
            'done)
-          ((eq? ch "\x15") ; ^U
+          ((char=? ch (integer->char #x15)) ; ^U
            (for-each
             (lambda (ch)
               (if (= 2 (char-display-width ch))
-                  (display "\x08 \x08\x08 \x08")
-                  (display "\x08 \x08")))
+                  (display (string (integer->char #x08)
+                                   #\space
+                                   (integer->char #x08)
+                                   (integer->char #x08)
+                                   #\space
+                                   (integer->char #x08)))
+                  (display (string (integer->char #x08)
+                                   #\space
+                                   (integer->char #x08)))))
             (string->list line))
            (set! line "")
            (loop))
-          ((eq? ch "\x04") ; ^D
-           (if (eq? "" line)
+          ((char=? ch (integer->char #x04)) ; ^D
+           (if (string=? "" line)
                (begin
                  (set! line (eof-object))
                  'done)
                (loop)))
-          ((eq? ch "\x10") ; ^P
+          ((char=? ch (integer->char #x10)) ; ^P
            (if *read-line-history*
                (begin
                  (for-each
                   (lambda (ch)
                     (if (= 2 (char-display-width ch))
-                        (display "\x08 \x08\x08 \x08")
-                        (display "\x08 \x08")))
+                        (display (string (integer->char #x08)
+                                         #\space
+                                         (integer->char #x08)
+                                         (integer->char #x08)
+                                         #\space
+                                         (integer->char #x08)))
+                        (display (string (integer->char #x08)
+                                         #\space
+                                         (integer->char #x08)))))
                   (string->list line))
                  (set! line *read-line-history*)
                  (set! *read-line-history* #f)
                  (display (apply string-append (map char-display (string->list line)))))
-               (display "\x07"))
+               (display (integer->char #x07))) ; BEL
            (loop))
-          ((eq? ch "\x7f") ; DEL
+          ((char=? ch (integer->char #x7f)) ; DEL
            (when (not (eq? 0 (string-length line)))
                  (let ((last-char (string-ref line (- (string-length line) 1))))
                    (set! line (substring line 0 (- (string-length line) 1)))
                    (if (= 2 (char-display-width last-char))
-                       (display "\x08 \x08\x08 \x08")
-                       (display "\x08 \x08"))))
+(display (string (integer->char #x08)
+                                   #\space
+                                   (integer->char #x08)
+                                   (integer->char #x08)
+                                   #\space
+                                   (integer->char #x08)))
+                  (display (string (integer->char #x08)
+                                   #\space
+                                   (integer->char #x08))))))
            (loop))
           (else
-           (write-char (char-display ch) (current-output-port))
-           (set! line (string-append line ch))
+           (display (char-display ch) (current-output-port))
+           (set! line (string-append line (string ch)))
            (loop))))
   (if (null? args)
       (set! port (current-input-port))

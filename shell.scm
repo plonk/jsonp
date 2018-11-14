@@ -3,10 +3,10 @@
   (let ((cmdline (read-line (current-input-port))))
     (if (eof-object? cmdline) ; ^D
         'done
-        (if (eq? "" cmdline) ; RETURN
+        (if (string=? "" cmdline) ; RETURN
             (iter)
             (let ((words (split "\\s+" cmdline)))
-              (if (eq? (car words) "exit")
+              (if (string=? (car words) "exit")
                   'exit
                   (begin
                     (let ((result (apply spawn (cons (str (car words) ".scm") (cdr words)) )))
