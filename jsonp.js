@@ -605,7 +605,6 @@ window.addEventListener('load', () => {
 
   function loop() {
     var start = +new Date;
-    var ninsts = 0;
 
     while (vms.length > 0) {
       var vm = vms[vms.length - 1];
@@ -636,7 +635,6 @@ window.addEventListener('load', () => {
             }
             break;
           }
-          ninsts++;
         } catch (e) {
           console.log(e);
           var str = inspect(e);
@@ -657,31 +655,9 @@ window.addEventListener('load', () => {
       if ((+new Date) - start >= ALLOCATED_TIME_MSEC)
         break;
     }
-    updateInstructionCount(ninsts);
-
     window.requestAnimationFrame(loop);
   }
   window.requestAnimationFrame(loop);
-
-  var instructionCount = null;
-  var INST_AVERAGE_FACTOR = 0.999;
-  var initialSamples = [];
-  function updateInstructionCount(n) {
-    var ips = n * 60
-    if (initialSamples && initialSamples.length < 180) {
-      initialSamples.push(ips);
-    } else if (initialSamples && initialSamples.length === 180) {
-      instructionCount = initialSamples.reduce((a, b) => a + b) / 180;
-      initialSamples = null;
-    } else {
-      instructionCount = (instructionCount * INST_AVERAGE_FACTOR) + (1 - INST_AVERAGE_FACTOR) * ips;
-    }
-    if (instructionCount !== null) {
-      $('#instructions').text(`${Math.round(instructionCount/1000)} KIPS`);
-    } else {
-      $('#instructions').text("calculating...");
-    }
-  }
 
   window.onblur = function (e) {
     windowFocused = false;
