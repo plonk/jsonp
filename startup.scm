@@ -249,3 +249,6 @@
   (if (null? xs)
       '()
       (cons (f (car xs)) (map f (cdr xs)))))
+
+(define (list? v)
+  (or (pair? v) (null? v)))

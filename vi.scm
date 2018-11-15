@@ -1,5 +1,5 @@
 (define *quitting* #f)
-(define *buffer* (undefined)) ; 必ず1行はある。
+(define *buffer* (list->vector '(""))) ; 必ず1行はある。
 (define *posy* 0) ; 有効範囲 [0,|*buffer*|)
 (define *posx* 0) ; 有効範囲 [0,|line|)
 (define *screen-top* 0)
@@ -36,13 +36,16 @@
                    (set! *posy* (- (vector-length *buffer*) 1)))
                (minimum-scroll)))
 
-   (list #\d (lambda () ;; 行削除
-               (clear-command-line)
-               (vector-splice! *buffer* *posy* 1)
-               (if (zero? (vector-length *buffer*))
-                   (vector-splice! *buffer* 0 0 ""))
-               (set! *posy* (min *posy* (- (vector-length *buffer*) 1)))
-               (set! *old-screen-top* #f)))
+   (list #\d
+         (list
+          (list #\d
+                (lambda () ;; 行削除
+                  (clear-command-line)
+                  (vector-splice! *buffer* *posy* 1)
+                  (if (zero? (vector-length *buffer*))
+                      (vector-splice! *buffer* 0 0 ""))
+                  (set! *posy* (min *posy* (- (vector-length *buffer*) 1)))
+                  (set! *old-screen-top* #f)))))
 
    (list #\x (lambda () ;; 文字削除
                (clear-command-line)
@@ -134,9 +137,18 @@
                    (display "Unknown command")))
                    (set! *old-screen-top* #f)
                  )))
+   (list #\Z
+         (list
+          (list #\Z (lambda ()
+                      (if *filename*
+                          (begin
+                            (save-buffer *filename*)
+                            (set! *quitting* #t))
+                          (beep))))))
+
    ))
 (define *input-mode-table* (list
-                             (list "\x7f" (lambda ()
+                             (list (integer->char #x7f) (lambda ()
                                             (cond
                                              ((zero? *posx*) (beep))
                                              (#t
@@ -147,7 +159,7 @@
                                                               (substring current-line *posx* (string-length current-line)))))
                                               (set! *posx* (max 0 (- *posx* 1)))))))
 
-                             (list "\n" (lambda ()
+                             (list #\newline (lambda ()
                                           (let ((left (substring (vector-ref *buffer* *posy*) 0 *posx*))
                                                 (right (substring (vector-ref *buffer* *posy*) *posx*(vector-length (vector-ref *buffer* *posy*)))))
                                             (vector-set! *buffer* *posy* left)
@@ -156,7 +168,7 @@
                                             (set! *posx* 0)
                                             (set! *old-screen-top* #f) ; ugly. force refresh
                                             )))
-                             (list "\x1b" (lambda ()
+                             (list (integer->char #x1b) (lambda ()
                                             (set! *input-mode* #f)
                                             (set! *posx* (max 0 (- *posx* 1)))
                                             ))))
@@ -366,7 +378,7 @@
   (if (string? contents)
       (let ((lines (split "\\n" contents)))
         (if (and (> (length lines) 1)
-                 (= (last lines) ""))
+                 (string=? (last lines) ""))
             (set! lines
                   (take lines (- (length lines) 1))))
         (set! *buffer* (list->vector lines)))
@@ -391,7 +403,7 @@
     (if entry
         ((cadr entry))
         (begin
-          (vector-set! *buffer* *posy* (string-insert (vector-ref *buffer* *posy*) *posx* key))
+          (vector-set! *buffer* *posy* (string-insert (vector-ref *buffer* *posy*) *posx* (string key)))
           (set! *posx* (+ 1 *posx*))))))
 
 (define (read-command)
@@ -399,7 +411,7 @@
     (if (string=? "" prefix)
         #f
         (string->number prefix)))
-  (define (iter prefix)
+  (define (iter prefix keymap)
     (let ((key (read-char)))
       (cond
        ((or (and (not (string=? prefix "")) (char=? key #\0))
@@ -412,13 +424,15 @@
             (char=? key #\7)
             (char=? key #\8)
             (char=? key #\9))
-        (iter (string-append prefix (string key))))
+        (iter (string-append prefix (string key)) keymap))
        (#t
-        (let ((entry (assoc key *command-mode-table*)))
+        (let ((entry (assoc key keymap)))
           (if entry
-              (list key (parse-prefix prefix))
+              (if (list? (cadr entry))
+                  (iter prefix (cadr entry))
+                  (list (cadr entry) (parse-prefix prefix)))
               #f))))))
-  (iter ""))
+  (iter "" *command-mode-table*))
 
 (define (command-loop)
 
@@ -440,12 +454,10 @@
         (input-mode-handle-key key))
       (let ((cmd (read-command)))
         (if cmd
-            (let ((key (car cmd))
+            (let ((fn (car cmd))
                   (count (cadr cmd)))
-              (let ((entry (assoc key *command-mode-table*)))
-                ((cadr entry) count)))
-            (beep)))
-      )
+                (fn count))
+            (beep))))
 
   (if *quitting*
     'done
