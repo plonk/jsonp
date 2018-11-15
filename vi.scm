@@ -8,16 +8,41 @@
 (define *old-screen-top* #f)
 (define *command-mode-table*
   (list
-   (list (integer->char #x0c) (lambda ()
+   (list (integer->char #x06) ; ^F
+         (lambda (n)
+           (clear-command-line)
+           (set! *screen-top*
+                 (min (- (vector-length *buffer*) 1) (+ 23 *screen-top*)))
+           (if (< *posy* *screen-top*)
+               (begin
+                 (set! *posy* *screen-top*)
+                 (clamp-posx!)))
+           (set! *old-screen-top* #f)))
+   (list (integer->char #x02) ; ^B
+         (lambda (n)
+           (clear-command-line)
+           (if (zero? *screen-top*)
+               (begin
+                 (set! *posy* 0)
+                 (set! *posx* 0))
+               (begin
+                 (set! *screen-top*
+                       (max 0 (- *screen-top* 23)))
+                 (if (> *posy* (+ 22 *screen-top*))
+                     (begin
+                       (set! *posy* (+ 22 *screen-top*))
+                       (clamp-posx!)))
+                 (set! *old-screen-top* #f)))))
+   (list (integer->char #x0c) (lambda (n)
                                 (clear-command-line)
                                 (set! *old-screen-top* #f)))
 
-   (list #\O (lambda () ;; 上に行を追加
+   (list #\O (lambda (n) ;; 上に行を追加
                (clear-command-line)
                (vector-splice! *buffer* *posy* 0 "")
                (set! *old-screen-top* #f)))
 
-   (list #\o (lambda () ;; 下に行を追加
+   (list #\o (lambda (n) ;; 下に行を追加
                (clear-command-line)
                (vector-splice! *buffer* (+ 1 *posy*) 0 "")
                (set! *posy* (+ 1 *posy*))
@@ -39,7 +64,7 @@
    (list #\d
          (list
           (list #\d
-                (lambda () ;; 行削除
+                (lambda (n) ;; 行削除
                   (clear-command-line)
                   (vector-splice! *buffer* *posy* 1)
                   (if (zero? (vector-length *buffer*))
@@ -47,7 +72,7 @@
                   (set! *posy* (min *posy* (- (vector-length *buffer*) 1)))
                   (set! *old-screen-top* #f)))))
 
-   (list #\x (lambda () ;; 文字削除
+   (list #\x (lambda (n) ;; 文字削除
                (clear-command-line)
                (let ((current-line (vector-ref *buffer* *posy*)))
                  (if (and (> (string-length current-line) 0)
@@ -61,11 +86,11 @@
                        (set! *posx* (min *posx* (- (string-length new-line) 1))))
                      (beep)))))
 
-   (list #\i (lambda ()
+   (list #\i (lambda (n)
                (clear-command-line)
                (set! *input-mode* #t)))
 
-   (list #\a (lambda ()
+   (list #\a (lambda (n)
                (clear-command-line)
                (set! *input-mode* #t)
                (set! *posx* (min (+ 1 *posx*) (string-length (vector-ref *buffer* *posy*))))))
@@ -107,15 +132,15 @@
                      (beep)
                      (set! *posx* target)))))
 
-   (list #\^ (lambda ()
+   (list #\^ (lambda (n)
                (clear-command-line)
                (set! *posx* 0)))
-   (list #\$ (lambda ()
+   (list #\$ (lambda (n)
                (clear-command-line)
                (set! *posx*
                      (max 0 (- (string-length (vector-ref *buffer* *posy*)) 1)))))
 
-   (list #\: (lambda ()
+   (list #\: (lambda (n)
                (clear-command-line)
                (move-cursor 23 0)
                (display ":")
@@ -139,7 +164,7 @@
                  )))
    (list #\Z
          (list
-          (list #\Z (lambda ()
+          (list #\Z (lambda (n)
                       (if *filename*
                           (begin
                             (save-buffer *filename*)
@@ -148,30 +173,33 @@
 
    ))
 (define *input-mode-table* (list
-                             (list (integer->char #x7f) (lambda ()
-                                            (cond
-                                             ((zero? *posx*) (beep))
-                                             (#t
-                                              (let ((current-line (vector-ref *buffer* *posy*)))
-                                                (vector-set! *buffer* *posy*
-                                                             (string-append
-                                                              (substring current-line 0 (max 0 (- *posx* 1)))
-                                                              (substring current-line *posx* (string-length current-line)))))
-                                              (set! *posx* (max 0 (- *posx* 1)))))))
+                             (list (integer->char #x7f)
+                                   (lambda ()
+                                     (cond
+                                      ((zero? *posx*) (beep))
+                                      (#t
+                                       (let ((current-line (vector-ref *buffer* *posy*)))
+                                         (vector-set! *buffer* *posy*
+                                                      (string-append
+                                                       (substring current-line 0 (max 0 (- *posx* 1)))
+                                                       (substring current-line *posx* (string-length current-line)))))
+                                       (set! *posx* (max 0 (- *posx* 1)))))))
 
-                             (list #\newline (lambda ()
-                                          (let ((left (substring (vector-ref *buffer* *posy*) 0 *posx*))
-                                                (right (substring (vector-ref *buffer* *posy*) *posx*(vector-length (vector-ref *buffer* *posy*)))))
-                                            (vector-set! *buffer* *posy* left)
-                                            (vector-splice! *buffer* (+ 1 *posy*) 0 right)
-                                            (set! *posy* (+ 1 *posy*))
-                                            (set! *posx* 0)
-                                            (set! *old-screen-top* #f) ; ugly. force refresh
-                                            )))
-                             (list (integer->char #x1b) (lambda ()
-                                            (set! *input-mode* #f)
-                                            (set! *posx* (max 0 (- *posx* 1)))
-                                            ))))
+                             (list #\newline
+                                   (lambda ()
+                                     (let ((left (substring (vector-ref *buffer* *posy*) 0 *posx*))
+                                           (right (substring (vector-ref *buffer* *posy*) *posx*(vector-length (vector-ref *buffer* *posy*)))))
+                                       (vector-set! *buffer* *posy* left)
+                                       (vector-splice! *buffer* (+ 1 *posy*) 0 right)
+                                       (set! *posy* (+ 1 *posy*))
+                                       (set! *posx* 0)
+                                       (set! *old-screen-top* #f) ; ugly. force refresh
+                                       )))
+                             (list (integer->char #x1b)
+                                   (lambda ()
+                                     (set! *input-mode* #f)
+                                     (set! *posx* (max 0 (- *posx* 1)))
+                                     ))))
 
 (define (minimum-scroll)
   (cond ((< *posy* *screen-top*)
@@ -333,6 +361,8 @@
 
 ;; カーソルを移動。座標は0ベース。
 (define (move-cursor y x)
+  (if (< y 0) (error "range error y"))
+  (if (< x 0) (error "range error x"))
   (put
    (string-append
     "\x1b["
@@ -435,9 +465,6 @@
   (iter "" *command-mode-table*))
 
 (define (command-loop)
-
-  (cursor-visible #f)
-
   ;; スクロール位置が変更されていたら画面を再描画
   (if (not (eq? *old-screen-top* *screen-top*))
       (begin
@@ -456,7 +483,8 @@
         (if cmd
             (let ((fn (car cmd))
                   (count (cadr cmd)))
-                (fn count))
+              (cursor-visible #f)
+              (fn count))
             (beep))))
 
   (if *quitting*
@@ -473,4 +501,5 @@
 
 (altscreen #t)
 (command-loop)
+(cursor-visible #t)
 (altscreen #f)
