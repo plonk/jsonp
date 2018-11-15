@@ -252,3 +252,9 @@
 
 (define (list? v)
   (or (pair? v) (null? v)))
+
+(define (spawn program . args)
+  (syscall 'spawn program args))
+
+(define (exit)
+  (syscall 'exit))

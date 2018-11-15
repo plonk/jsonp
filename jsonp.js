@@ -452,10 +452,6 @@ window.addEventListener('load', () => {
       ["undefined", function(str) {
         return undefined;
       }],
-      ["spawn", spawnProgram],
-      ["exit", function () {
-        vms.pop();
-      }],
       ["list", list],
       ["sys-list-files", function () {
         return list.apply(null, Object.keys($ASSETS).map(s => new MutableString(s)));
@@ -593,12 +589,11 @@ window.addEventListener('load', () => {
 
   var vms = [];
 
-  function spawnProgram(filename) {
+  function spawnProgram(filename, args) {
     if ($ASSETS[filename] === undefined) {
       return "no-such-file";
     } else {
-      var argv = list.apply(null, Array.from(arguments).slice(1));
-      vms.push(loadProgram(filename, argv));
+      vms.push(loadProgram(filename, args));
       return "ok";
     }
   }
@@ -610,56 +605,70 @@ window.addEventListener('load', () => {
   function loop() {
     var start = +new Date;
 
+    loop1:
     while (vms.length > 0) {
       var vm = vms[vms.length - 1];
-      if (!vm.pc) {
-        vms.pop();
-      } else if (interrupted) {
-        print("Interrupt");
-        vms.pop();
-        interrupted = false;
-      } else {
-        if (vm.syscall) { // システムコールの終了待ち。
-          break;
-        }
 
-        try {
-          vm.step();
-          if (vm.syscall !== null) {
-            if (vm.syscall[0].name == "sleep") {
-              setTimeout(() => {
-                vm.syscall = null;
-                vm.pc = vm.continue;
-                vm.val = "ok";
-              }, 1000 * vm.syscall[1]);
-            } else {
-              vm.syscall = null;
-              vm.pc = vm.continue;
-              vm.val = "error-unknown-syscall";
-            }
-            break;
-          }
-        } catch (e) {
-          console.log(e);
-          var str = inspect(e);
-          for (var ch of str)
-            ttyOutputPort.writeChar(ch);
-          ttyOutputPort.writeChar("\n");
-          dumpFrames(vm.env);
-          if (vm.env.has_variable("*resume-from-error*")) {
-            var c = vm.env.lookup_variable("*resume-from-error*");
-            vm.restore_from_continuation(c);
-          } else {
-            // terminate this process.
-            vms.pop();
-          }
-        }
+      if (interrupted) {
+        print("Interrupted");
+        interrupted = false;
+        vms.pop();
+        continue loop1;
       }
 
-      if ((+new Date) - start >= ALLOCATED_TIME_MSEC)
-        break;
+      try {
+        while ((+new Date) - start < ALLOCATED_TIME_MSEC) {
+          for (var i = 0; i < 1000; i++) {
+            if (!vm.pc) {
+              vms.pop(); // プロセスの終了。
+              continue loop1;
+            } else if (vm.syscall) {
+              if (vm.syscall[0] === "sleep") {
+                setTimeout(() => {
+                  vm.syscall = null;
+                  vm.pc = vm.continue;
+                  vm.val = "ok";
+                  window.requestAnimationFrame(loop); // resume
+                }, 1000 * vm.syscall[1]);
+                return; /* タイムアウトまで何も実行しない。 */
+              } else if (vm.syscall[0] === "spawn") {
+                var r = spawnProgram(vm.syscall[1], vm.syscall[2]);
+                vm.syscall = null;
+                vm.pc = vm.continue;
+                vm.val = r;
+              } else if (vm.syscall[0] === "exit") {
+                vms.pop();
+              } else {
+                vm.syscall = null;
+                vm.pc = vm.continue;
+                vm.val = "error-unknown-syscall";
+              }
+              continue loop1;
+            }
+            vm.pc();
+          }
+        }
+      } catch (e) {
+        // 例外の表示
+        console.log(e);
+        var str = inspect(e);
+        for (var ch of str)
+          ttyOutputPort.writeChar(ch);
+        ttyOutputPort.writeChar("\n");
+        dumpFrames(vm.env);
+        if (vm.env.has_variable("*resume-from-error*")) {
+          var c = vm.env.lookup_variable("*resume-from-error*");
+          vm.restore_from_continuation(c);
+        } else {
+          // terminate this process.
+          vms.pop();
+        }
+        continue loop1;
+      }
+      window.requestAnimationFrame(loop);
+      return;
     }
-    window.requestAnimationFrame(loop);
+    print("Halted");
   }
   window.requestAnimationFrame(loop);
 
