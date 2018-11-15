@@ -461,7 +461,11 @@ window.addEventListener('load', () => {
         return list.apply(null, Object.keys($ASSETS).map(s => new MutableString(s)));
       }],
       ["sys-get-file-contents", function (filename) {
-        return new MutableString($ASSETS[filename]);
+        var data = $ASSETS[filename];
+        if (typeof(data) === 'string')
+          return new MutableString(data);
+        else
+          return "no-such-file";
       }],
       ["sys-put-file-contents", function (filename, contents) {
         $ASSETS[filename] = contents.toString();
