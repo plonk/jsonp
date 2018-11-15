@@ -252,18 +252,11 @@ class VM {
   }
 
   step() {
-    try {
-      this.pc.apply(this, []);
-    } catch (e) {
-      if (e !== "jump") {
-        throw e;
-      }
-    }
+    this.pc();
   }
 
   goto(label) {
     this.pc = label
-    throw "jump";
   }
 
   // 式タイプ判別関数：
