@@ -471,7 +471,7 @@ class VM {
 
   primitive_apply() {
     this.env = new Frame(this.env);
-    this.env.name = "[native JS code]";
+    this.env.name = "#<JS function " + this.proc.name + ">";
     this.val = this.proc.apply(null, array(this.argl))
     this.env = this.env.parent;
     this.continue = this.restore()

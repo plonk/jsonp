@@ -446,7 +446,9 @@ window.addEventListener('load', () => {
       ["equal?", equal],
       ["read-from-string", function(str) {
         var res = readFromString(""+str);
-        console.log(res);
+        if (res[0] === "error") {
+          throw new Error(res[1]);
+        }
         return res[1];
       }],
       ["undefined", function(str) {
