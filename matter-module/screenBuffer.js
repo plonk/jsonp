@@ -66,7 +66,7 @@ GraphicAttrs.prototype.equals = function (other) {
 };
 
 // 文字セル。
-function Cell(proto) {
+ScreenBuffer.Cell = function (proto) {
   if (!proto)
     proto = {};
 
@@ -79,15 +79,15 @@ function Cell(proto) {
   }
 }
 
-Cell.prototype.clone = function () {
-  var res = new Cell();
+ScreenBuffer.Cell.prototype.clone = function () {
+  var res = new ScreenBuffer.Cell();
   res.character = this.character;
   res.broken = this.broken;
   res.attrs = this.attrs.clone();
   return res;
 };
 
-Cell.prototype.equals = function (other) {
+ScreenBuffer.Cell.prototype.equals = function (other) {
   return this.character === other.character &&
     this.broken === other.broken &&
     this.attrs.equals(other.attrs);
@@ -131,7 +131,7 @@ Row.prototype.getCellAt = function (index) {
   this.checkInRange(index);
 
   if (this.array[index] === undefined)
-    this.array[index] = new Cell();
+    this.array[index] = new ScreenBuffer.Cell();
 
   return this.array[index];
 };
@@ -144,7 +144,7 @@ Row.prototype.setCellAt = function (index, cell) {
 
 Row.prototype.clear = function (columns, attrs) {
   for (var i = 0; i < columns; i++) {
-    this.array[i] = new Cell();
+    this.array[i] = new ScreenBuffer.Cell();
     this.array[i].attrs = attrs.clone();
   }
   this.setType('normal');
@@ -354,7 +354,7 @@ ScreenBuffer.prototype.clone = function () {
 ScreenBuffer.prototype.clearToEnd = function (y, x, attrs) {
   if (x !== 0) {
     for (var i = x; i < this.columns; i++) {
-      var cell = new Cell();
+      var cell = new ScreenBuffer.Cell();
       cell.attrs = attrs.clone();
       this.getLine(y).setCellAt(i, cell);
     }
@@ -369,7 +369,7 @@ ScreenBuffer.prototype.clearToEnd = function (y, x, attrs) {
 ScreenBuffer.prototype.clearFromBeginning = function (y, x, attrs) {
   if (x !== this.columns - 1) {
     for (var i = 0; i <= x; i++) {
-      var cell = new Cell();
+      var cell = new ScreenBuffer.Cell();
       cell.attrs = attrs.clone();
       this.getLine(y).setCellAt(i, cell);
     }

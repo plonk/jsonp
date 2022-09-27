@@ -294,7 +294,7 @@ Receiver.prototype.scrollBack = function (n) {
 Receiver.prototype.clear = function (from, to) {
   // XXX: 文字属性のコピーは？
   for (var i = from; i < to; i++) {
-    this.buffer.setCellAtOffset(i, new Cell());
+    this.buffer.setCellAtOffset(i, new ScreenBuffer.Cell());
   }
 };
 
@@ -531,20 +531,20 @@ Receiver.prototype.eraseInLine = function (args_str) {
   case 0: // to the end
     for (var i = this.cursor_x; i < this.columns; i++) {
       this.buffer.setCellAt(this.cursor_y, i,
-                           new Cell({attrs: this.graphicAttrs}));
+                           new ScreenBuffer.Cell({attrs: this.graphicAttrs}));
     }
     break;
   case 1: // from the beginning
     // カーソル位置の文字も消す
     for (var i = 0; i <= this.cursor_x; i++) {
       this.buffer.setCellAt(this.cursor_y, i,
-                           new Cell({attrs: this.graphicAttrs}));
+                           new ScreenBuffer.Cell({attrs: this.graphicAttrs}));
     }
     break;
   case 2: // entire line
     for (var i = 0; i < this.columns; i++) {
       this.buffer.setCellAt(this.cursor_y, i,
-                           new Cell({attrs: this.graphicAttrs}));
+                           new ScreenBuffer.Cell({attrs: this.graphicAttrs}));
     }
     break;
   default:
@@ -589,7 +589,7 @@ Receiver.prototype.deleteCharacters = function (args_str) {
   for (var offset = (this.cursor_y + 1) * this.columns - num;
        offset < (this.cursor_y + 1) * this.columns;
        offset++) {
-    this.buffer.setCellAtOffset(offset, new Cell({attrs: this.graphicAttrs})); // 文字属性要る？
+    this.buffer.setCellAtOffset(offset, new ScreenBuffer.Cell({attrs: this.graphicAttrs})); // 文字属性要る？
   }
 };
 
@@ -600,7 +600,7 @@ Receiver.prototype.eraseCharacters = function (args_str) {
 
   for (var i = 0; i < num; i++) {
     this.buffer.setCellAt(this.cursor_y, this.cursor_x + i,
-                          new Cell({attrs: this.graphicAttrs}));
+                          new ScreenBuffer.Cell({attrs: this.graphicAttrs}));
   }
 };
 
@@ -640,7 +640,7 @@ Receiver.prototype.insertBlankCharacters = function (args_str) {
 
   // line[cursor_x] から line[cursor_x + num - 1] までを空白にする。
   for (var j = 0; j < num; j++) {
-    this.buffer.setCellAt(this.cursor_y, this.cursor_x + j, new Cell());
+    this.buffer.setCellAt(this.cursor_y, this.cursor_x + j, new ScreenBuffer.Cell());
   }
 };
 
@@ -1274,7 +1274,7 @@ Receiver.prototype.reverseIndex = function () {
 Receiver.prototype.screenAlignmentDisplay = function () {
   for (var y = 0; y < this.buffer.rows; y++) {
     for (var x = 0; x < this.buffer.columns; x++) {
-      this.buffer.setCellAt(y, x, new Cell());
+      this.buffer.setCellAt(y, x, new ScreenBuffer.Cell());
     }
   }
 };
