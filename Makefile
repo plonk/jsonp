@@ -1,2 +1,2 @@
-assets.js: startup.scm repl.scm hello.scm shell.scm ls.scm echo.scm cat.scm scr.scm init.scm reset.scm vi.scm tests.scm more.scm
+assets.js: font.txt font-2.txt font-3.txt
 	ruby text2js.rb $^ > assets.js

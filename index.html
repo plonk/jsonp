@@ -10,7 +10,7 @@
     <!-- Bootstrap -->
     <link rel="stylesheet" href="bower_components/bootstrap/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="bower_components/bootstrap/dist/css/bootstrap-theme.min.css">
-    <script src="bower_components/bootstrap/dist/js/bootstrap.min.js"></script>
+    <script src="bower_components/sprintf/dist/sprintf.min.js"></script>
 
     <!-- Matter -->
     <script src="node_modules/CBuffer/cbuffer.js"></script>
@@ -23,13 +23,20 @@
     <!-- レンダリング -->
     <script src="renderer.js"></script>
 
-    <!-- Lispインタプリタ -->
-    <script src="vm.js"></script>
+    <script src="sixelgraphics.js"></script>
 
     <!-- .scm ファイル -->
     <script src="assets.js"></script>
 
     <!-- ページJS -->
+    <script src="sound.js"></script>
+    <script src="item.js"></script>
+    <script src="monster.js"></script>
+    <script src="trap.js"></script>
+    <script src="hero.js"></script>
+    <script src="room.js"></script>
+    <script src="level.js"></script>
+    <script src="dungeon.js"></script>
     <script src="jsonp.js"></script>
 
     <!-- アプリケーションCSS -->
@@ -40,9 +47,9 @@
     <div class="container">
 
       <!-- Matter 表示キャンバス -->
-      <div id="screen-outer" style="position: relative">
-        <canvas id="bottom-layer" style="position: absolute; left: 0; top: 0; z-index: 0" width=640 height=384></canvas>
-        <canvas id="top-layer"    style="position: absolute; left: 0; top: 0; z-index: 1" width=640 height=384></canvas>
+      <div id="screen-outer" style="position: relative; padding: 0.5em; background-color: black">
+        <canvas id="bottom-layer" style="position: absolute; left: 0.5em; top: 0.5em; z-index: 0" width=640 height=384></canvas>
+        <canvas id="top-layer"    style="position: absolute; left: 0.5em; top: 0.5em; z-index: 1" width=640 height=384></canvas>
       </div>
 
       <!-- インジケータ -->
