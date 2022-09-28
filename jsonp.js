@@ -85,7 +85,19 @@ const Curses = {
 
   KEY_DOWN: null,
   KEY_UP: null,
-  A_BOLD: null,
+  A_BOLD: 1,
+  A_BLINK: 5,
+
+  COLOR_BLACK: 0,
+  COLOR_RED: 1,
+  COLOR_GREEN: 2,
+  COLOR_YELLOW: 3,
+  COLOR_BLUE: 4,
+  COLOR_MAGENTA: 5,
+  COLOR_CYAN: 6,
+  COLOR_WHITE: 7,
+
+  _color_pairs: [],
 
   timeout: -1,
 
@@ -99,6 +111,7 @@ const Curses = {
       this.x = x
       this.maxy = lines
       this.maxx = cols
+      this._attrs = []
     }
 
     keypad(flag)
@@ -108,12 +121,14 @@ const Curses = {
 
     attron(attr)
     {
+      this._attrs.push(attr)
     }
 
     attroff(attr)
     {
+      this._attrs.delete(attr)
     }
-    
+
     clear()
     {
       for (let y = 0; y < this.maxy; y++) {
@@ -148,7 +163,10 @@ const Curses = {
 
     addstr(str)
     {
+      const attrs = this._attrs.join(";")
+      print(`\x1b[${attrs}m`)
       print(str)
+      print("\x1b[0m")
     }
 
     async getch()
@@ -178,7 +196,17 @@ const Curses = {
 
   addstr(str)
   {
-    print(str)
+    this.stdscr.addstr(str)
+  },
+
+  attron(attr)
+  {
+    this.stdscr.attron(attr)
+  },
+
+  attroff(attr)
+  {
+    this.stdscr.attroff(attr)
   },
 
   refresh()
@@ -203,21 +231,39 @@ const Curses = {
     return c
   },
 
-  attron(attr)
+  color_pair(n)
   {
-  },
-
-  attroff(attr)
-  {
-  },
-
-  color_pair(x)
-  {
+    return this._color_pairs[n] || "30;40"
   },
 
   clrtoeol()
   {
     print("\x1b[0K")
+  },
+
+  init_screen()
+  {
+  },
+
+  start_color()
+  {
+  },
+
+  noecho()
+  {
+  },
+
+  crmode()
+  {
+  },
+
+  close_screen()
+  {
+  },
+
+  init_pair(n, fg, bg)
+  {
+    this._color_pairs[n] = `3${fg};4${bg}`
   },
 }
 
@@ -604,11 +650,55 @@ class Float
   static INFINITY = 1/0
 }
 
+const Finalizers = []
+function at_exit(f)
+{
+  Finalizers.push(f)
+}
+
+class Action
+{
+  constructor(type, direction)
+  {
+    this.type = type
+    this.direction = direction
+  }
+}
+
 class Program
 {
+  static DIRECTIONS = [[0,-1], [1,-1], [1,0], [1,1], [0,1], [-1,1], [-1,0], [-1,-1]]
+
+  static HEALTH_BAR_COLOR_PAIR        = 1
+  static UNIDENTIFIED_ITEM_COLOR_PAIR = 2
+  static NICKNAMED_ITEM_COLOR_PAIR    = 3
+  static CURSED_ITEM_COLOR_PAIR       = 4
+  static SPECIAL_DUNGEON_COLOR_PAIR   = 5
+
   constructor()
   {
-    // ...
+    this.debug = false
+    this.hard_mode = false
+    this.default_name = null
+
+    // load_softfonts()
+
+    Curses.init_screen()
+    Curses.start_color()
+
+    Curses.init_pair(Program.HEALTH_BAR_COLOR_PAIR, Curses.COLOR_GREEN, Curses.COLOR_RED)
+    Curses.init_pair(Program.UNIDENTIFIED_ITEM_COLOR_PAIR, Curses.COLOR_YELLOW, Curses.COLOR_BLACK)
+    Curses.init_pair(Program.NICKNAMED_ITEM_COLOR_PAIR, Curses.COLOR_GREEN, Curses.COLOR_BLACK)
+    Curses.init_pair(Program.CURSED_ITEM_COLOR_PAIR, Curses.COLOR_WHITE, Curses.COLOR_BLUE)
+    Curses.init_pair(Program.SPECIAL_DUNGEON_COLOR_PAIR, Curses.COLOR_MAGENTA, Curses.COLOR_BLACK)
+
+    Curses.noecho()
+    Curses.crmode()
+    Curses.stdscr.keypad(true)
+
+    at_exit(
+      () => Curses.close_screen()
+    )
 
     this.reset()
   }
@@ -656,6 +746,210 @@ class Program
     this.last_message_shown_at = new Date
 
    // this.naming_table = this.create_naming_table()
+  }
+
+  // 状態異常が解けた時のメッセージ。
+  on_status_effect_expire(character, effect)
+  {
+    switch ( effect.type ) {
+    case 'paralysis':
+      this.log(`${this.display_character(character)}の かなしばりがとけた。`)
+      break
+    case 'sleep':
+      this.log(`${this.display_character(character)}は 目をさました。`)
+      break
+    case 'held':
+      this.log(`${this.display_character(character)}の 足が抜けた。`)
+      break
+    case 'confused':
+      this.log(`${this.display_character(character)}の 混乱がとけた。`)
+      break
+    case 'quick':
+      this.log(`${this.display_character(character)}の 足はもう速くない。`)
+      break
+    default:
+      this.log(`${this.display_character(character)}の ${effect.name}状態がとけた。`)
+      break
+    }
+  }
+
+  // 状態異常の残りターン数減少処理。
+  status_effects_wear_out()
+  {
+    const monsters = this.level.all_monsters_with_position.map( ([m, x, y]) =>  m )
+
+    monsters.concat( [this.hero] ).each(
+      m => {
+        m.status_effects.each( e => e.remaining_duration -= 1 )
+
+        m.status_effects.reject_d(
+          e => {
+            const expired = e.remaining_duration <= 0
+            if (expired)
+              on_status_effect_expire(m, e)
+            return expired
+          }
+        )
+      }
+    )
+  }
+
+  // ヒーローの攻撃力。(Lvと武器)
+  get_hero_attack()
+  {
+    const basic = this.lv_to_attack(this.exp_to_lv(this.hero.exp))
+    const weapon_score = this.hero.weapon ? this.hero.weapon.number : 0
+    return (basic + basic * (weapon_score + this.hero.strength - 8)/16.0).round()
+  }
+
+  // ヒーローの投擲攻撃力。
+  get_hero_projectile_attack(projectile_strength)
+  {
+    const basic = this.lv_to_attack(this.exp_to_lv(this.hero.exp))
+    return (basic + basic * (projectile_strength - 8)/16.0).round()
+  }
+
+  // ヒーローの防御力。
+  get_hero_defense()
+  {
+    return this.hero.shield ? this.hero.shield.number : 0
+  }
+
+  // モンスターの攻撃力。
+  get_monster_attack(m)
+  {
+    return m.strength
+  }
+
+  // モンスターにダメージを与える。
+  monster_take_damage(monster, damage, cell)
+  {
+    if (monster.damage_capped_p())
+      damage = [damage, 1].min()
+
+    const set_to_explode = !monster.nullified_p() && monster.bomb_p() && monster.hp < monster.max_hp.div(2)
+
+    monster.hp -= damage
+    this.log(`${this.display_character(monster)}に ${damage} のダメージを与えた。`)
+    if (monster.hp >= 1.0) { // 生きている
+      if (set_to_explode) {
+        this.monster_explode(monster, cell)
+        return
+      }
+
+      this.on_monster_taking_damage(monster, cell)
+    }
+    this.check_monster_dead(cell, monster)
+  }
+
+  // ヒーローがモンスターを攻撃する。
+  hero_attack(cell, monster)
+  {
+    this.log(`${this.hero.name}の攻撃！ `)
+    this.on_monster_attacked(monster)
+    if (!this.hero.no_miss_p() && rand() < 0.125) {
+      SoundEffects.miss()
+      this.log(`${this.hero.name}の攻撃は 外れた。`)
+    } else {
+      SoundEffects.hit()
+      const attack = this.get_hero_attack()
+      let damage = ( ( attack * Math.pow(15.0/16.0, monster.defense) ) * (112 + rand(32))/128.0 ).to_i()
+      if (monster.name == "竜" && this.hero.weapon?.name == "ドラゴンキラー")
+        damage *= 2
+
+      if (this.hero.critical_p() && rand() < 0.25) {
+        this.log("会心の一撃！")
+        damage *= 2
+      }
+      this.monster_take_damage(monster, damage, cell)
+    }
+  }
+
+  // モンスターが死んでいたら、その場合の処理を行う。
+  check_monster_dead(cell, monster)
+  {
+    if (monster.hp < 1.0) {
+      if (monster.invisible && !this.level.whole_level_lit) {
+        const old = this.display_character(monster)
+        monster.invisible = false
+        monster.hp = 1
+        this.log(`${old}は ${this.display_character(monster)}だった!`)
+        this.render()
+        monster.hp = 0
+        this.render()
+      }
+      this.monster.reveal_self() // 化けの皮を剥ぐ。
+
+      cell.remove_object(monster)
+
+      let thing
+      if (monster.item)
+        thing = monster.item
+      else if (rand() < monster.drop_rate)
+        thing = this.dungeon.make_random_item_or_gold(this.level_number)
+      else
+        thing = null
+
+      if (thing) {
+        const [x, y] = this.level.coordinates_of_cell(cell)
+        this.item_land(thing, x, y)
+      }
+
+      this.hero.exp += monster.exp
+      this.log(`${this.display_character(monster)}を たおして ${monster.exp} ポイントの経験値を得た。`)
+      this.check_level_up()
+
+      this.hero.status_effects.reject_d(
+        e => {
+          if (e.caster === monster) {
+            this.on_status_effect_expire(this.hero, e)
+            return true
+          } else {
+            return false
+          }
+        }
+      )
+    }
+  }
+
+  // 行動により満腹度が消費される。満腹度が無い時はHPが減る。
+  hero_fullness_decrease()
+  {
+    const old = this.hero.fullness
+    if (this.hero.fullness > 0.0) {
+      if ( this.dungeon.on_return_trip_p(this.hero) ) {
+        this.hero.fullness -= this.hero.hunger_per_turn
+        if (old >= 20.0 && this.hero.fullness <= 20.0)
+          this.log("おなかが 減ってきた。")
+        else if (old >= 10.0 && this.hero.fullness <= 10.0)
+          this.log("空腹で ふらふらしてきた。")
+        else if (this.hero.fullness <= 0.0)
+          this.log("早く何か食べないと死んでしまう！ ")
+      }
+
+      // 自然回復
+      this.hero.hp = [this.hero.hp + this.hero.max_hp/150.0, this.hero.max_hp].min()
+    } else {
+      this.take_damage(1, { quiet: true })
+    }
+  }
+
+  // ヒーローがダメージを受ける。
+  take_damage(amount, opts = {})
+  {
+    if (opts.quiet) {
+      this.stop_dashing()
+    } else {
+      this.log(
+        sprintf("%.0f ポイントの ダメージを受けた。", amount)
+      )
+    }
+
+    this.hero.hp -= amount
+    if (this.hero.hp < 1.0) {
+      this.hero.hp = 0.0
+      throw new HeroDied
+    }
   }
 
   // ヒーローの名前を付ける。
@@ -798,6 +1092,246 @@ class Program
     default:
       this.log(`[${c}]なんて 知らない。[?]でヘルプ。`)
       return 'nothing'
+    }
+  }
+
+  // 移動キー定義。
+  static KEY_TO_DIRVEC = {
+    'h': [-1,  0],
+    'j': [ 0, +1],
+    'k': [ 0, -1],
+    'l': [+1,  0],
+    'y': [-1, -1],
+    'u': [+1, -1],
+    'b': [-1, +1],
+    'n': [+1, +1],
+
+    'H': [-1,  0],
+    'J': [ 0, +1],
+    'K': [ 0, -1],
+    'L': [+1,  0],
+    'Y': [-1, -1],
+    'U': [+1, -1],
+    'B': [-1, +1],
+    'N': [+1, +1],
+
+    // テンキー。
+    [Curses.KEY_LEFT] : [-1, 0],
+    [Curses.KEY_RIGHT]: [+1, 0],
+    [Curses.KEY_UP]   : [0, -1],
+    [Curses.KEY_DOWN] : [0, +1],
+
+    [Curses.KEY_HOME] : [-1, -1],
+    [Curses.KEY_END]  : [-1, +1],
+    [Curses.KEY_PPAGE]: [+1, -1],
+    [Curses.KEY_NPAGE]: [+1, +1],
+
+    '7': [-1, -1],
+    '8': [ 0, -1],
+    '9': [+1, -1],
+    '4': [-1,  0],
+    '6': [+1,  0],
+    '1': [-1, +1],
+    '2': [ 0, +1],
+    '3': [+1, +1],
+
+    // nav cluster のカーソルキーをシフトすると以下になる。
+    [Curses.KEY_SLEFT]: [-1, 0],
+    [Curses.KEY_SRIGHT]: [+1, 0],
+    [Curses.KEY_SR]: [0, -1], // scroll back
+    [Curses.KEY_SF]: [0, +1], // scroll forward
+  }
+
+  hero_can_move_to_p(target)
+  {
+    if (Vec.chess_distance(this.hero.pos, target) != 1)
+      return false
+
+    const [dx, dy] = Vec.minus(target, this.hero.pos)
+    if (dx * dy != 0) {
+      return (this.level.passable_p(this.hero.x + dx, this.hero.y + dy) &&
+              this.level.uncornered_p(this.hero.x + dx, this.hero.y) &&
+              this.level.uncornered_p(this.hero.x, this.hero.y + dy))
+    } else {
+      return this.level.passable_p(this.hero.x + dx, this.hero.y + dy)
+    }
+  }
+
+  // ヒーローの移動・攻撃。
+  // String → :move | :action
+  hero_move(c)
+  {
+    let vec = Program.KEY_TO_DIRVEC[c]
+    if (! vec)
+      throw new Error("argument error: " +  `unknown movement key ${c}`)
+
+    const shifted = ('H J K L Y U B N 7 8 9 4 6 1 2 3'.split(' ').concat([Curses.KEY_SLEFT, Curses.KEY_SRIGHT, Curses.KEY_SR, Curses.KEY_SF])).include_p(c)
+
+    if (this.hero.confused_p())
+      vec = DIRECTIONS.sample()
+
+    const target = Vec.plus(this.hero.pos, vec)
+    if (!this.hero_can_move_to_p(target))
+      return 'nothing'
+
+    const cell = this.level.cell(... target)
+    if (cell.monster) {
+      this.hero_attack(cell, cell.monster)
+      return 'action'
+    } else {
+      if (this.hero.held_p()) {
+        this.log("その場に とらえられて 動けない！ ")
+        return 'action'
+      }
+
+      if (shifted) {
+        this.dash_direction = vec
+      }
+      this.hero_walk(... target, !shifted)
+      return 'move'
+    }
+  }
+
+  display_item(item)
+  {
+    if (item instanceof Gold)
+      return item.to_s()
+
+    switch (item.type) {
+    case 'weapon':
+    case 'shield':
+      if (item.inspected)
+        return this.display_inspected_item(item)
+      else
+        return ["unidentified", item.name]
+
+    case 'ring':
+      if (item.inspected)
+        return this.display_inspected_item(item)
+      else
+        return this.display_uninspected_item(item)
+
+    case 'staff':
+      if (item.inspected)
+        return this.display_inspected_item(item)
+      else
+        return this.display_uninspected_item(item)
+
+    default:
+      return this.display_uninspected_item(item)
+    }
+  }
+
+  display_inspected_item(item)
+  {
+    if (item.cursed)
+      return ["cursed", item.to_s()]
+    else
+      return item.to_s()
+  }
+
+  display_uninspected_item(item)
+  {
+    if (this.naming_table.include_p(item.name)) {
+      switch (this.naming_table.state(item.name)) {
+      case 'identified':
+        if (item.type == 'staff') // 杖の種類は判別しているが回数がわからない状態。
+          return ["unidentified", item.name]
+        else if ( item.type == 'ring' )
+          return ["unidentified", item.name]
+        else
+          return item.to_s()
+
+      case 'nicknamed':
+        return this.display_item_by_nickname(item)
+
+      case 'unidentified':
+        return ["unidentified", this.naming_table.false_name(item.name)]
+
+      default:
+        throw new Error
+      }
+    } else {
+      return item.to_s()
+    }
+  }
+
+  display_item_by_nickname(item)
+  {
+    const kind_label =
+          ({
+            herb:  "草",
+            scroll:  "巻物",
+            ring:  "指輪",
+            staff:  "杖",
+          })[item.type] || "？"
+
+    return ["nicknamed", kind_label, ":", this.naming_table.nickname(item.name)]
+  }
+
+  hero_walk(x1, y1, picking)
+  {
+    if (this.level.cell(x1, y1).item?.mimic) {
+      const item = this.level.cell(x1, y1).item
+      this.log(this.display_item(item), "は ミミックだった!")
+      const m = Monster.make_monster("ミミック")
+      m.state = 'awake'
+      m.action_point = m.action_point_recovery_rate // このターンに攻撃させる
+      this.level.cell(x1, y1).remove_object(item)
+      this.level.cell(x1, y1).put_object(m)
+      this.stop_dashing()
+      return
+    }
+
+    //SoundEffects.footstep()
+
+    this.hero_change_position(x1, y1)
+    const cell = this.level.cell(x1, y1)
+
+    const gold = cell.gold
+    if (gold) {
+      if (picking) {
+        cell.remove_object(gold)
+        this.hero.gold += gold.amount
+        this.log(`${gold.amount}G を拾った。`)
+      } else {
+        this.log(`${gold.amount}G の上に乗った。`)
+        this.stop_dashing()
+      }
+    }
+
+    const item = cell.item
+    if (item) {
+      if (picking) {
+        this.pick(cell, item)
+      }else {
+        this.log(this.display_item(item), "の上に乗った。")
+        this.stop_dashing()
+      }
+    }
+
+    const trap = cell.trap
+    if (trap) {
+      const activation_rate = trap.visible ? (1/4.0) : (3/4.0)
+      trap.visible = true
+      this.stop_dashing()
+      if (this.hero.ring?.name != "ワナ抜けの指輪") {
+        if (rand() < activation_rate)
+          this.trap_activate(trap)
+        else
+          this.log(`${trap.name}は 発動しなかった。`)
+      }
+    }
+
+    if (cell.staircase)
+      this.stop_dashing()
+
+    if (this.hero.ring?.name == "ワープの指輪") {
+      if (rand() < 1.0/16) {
+        this.log(this.hero.name, "は ワープした！")
+        this.stop_dashing() // 駄目押し
+        this.hero_teleport()
+      }
     }
   }
 
@@ -1036,7 +1570,7 @@ class Program
   recover_monster_action_point()
   {
     this.level.all_monsters_with_position.each(
-      (m, _x, _y) => m.action_point += m.action_point_recovery_rate
+      ( [m, _x, _y] ) => m.action_point += m.action_point_recovery_rate
     )
   }
 
@@ -1052,6 +1586,14 @@ class Program
 
   }
 
+  all_monsters_moved_p()
+  {
+    console.log(this.level.all_monsters_with_position)
+    return this.level.all_monsters_with_position.every(
+      ( [m, ... pos] ) => m.action_point < 2
+    )
+  }
+
   // マップを表示。
   render_map()
   {
@@ -1065,6 +1607,22 @@ class Program
         Curses.addstr(this.dungeon_char(x1, y1))
       }
     }
+  }
+
+  display_character(character)
+  {
+    if ( character instanceof Monster && character.invisible && !this.level.whole_level_lit )
+      return "見えない敵"
+    else
+      return character.name
+  }
+
+  trap_visible_to_hero(trap)
+  {
+    if ( !(trap instanceof Trap) )
+      throw new Error('type error')
+
+    return (this.hero.trap_detecting_p() || this.hero.ring?.name == "よくみえの指輪" || trap.visible)
   }
 
   visible_to_hero_p(obj, lit, globally_lit, explored)
@@ -1318,6 +1876,180 @@ class Program
     }
   }
 
+  // ヒーロー this.hero が item を拾おうとする。
+  pick(cell, item)
+  {
+    if (item.stuck) {
+      this.log(this.display_item(item), "は 床にはりついて 拾えない。")
+    } else {
+      if (this.hero.add_to_inventory(item)) {
+        cell.remove_object(item)
+        this.update_stairs_direction()
+        this.log(this.hero.name, "は ", this.display_item(item), "を 拾った。")
+      } else {
+        this.log("持ち物が いっぱいで ", this.display_item(item), "が 拾えない。")
+      }
+    }
+  }
+
+  adjacent_p(v1, v2)
+  {
+    return Vec.chess_distance(v1, v2) == 1
+  }
+
+  // (Monster, Integer, Integer) → Action
+  monster_action(m, mx, my)
+  {
+    switch ( m.name ) {
+    // 特殊な行動パターンを持つモンスターはここに case ラベルを追加。
+    default:
+      switch ( m.state ) {
+      case 'asleep':
+        // ヒーローがに周囲8マスに居れば1/2の確率で起きる。
+        if ( this.hero.ring?.name != "盗賊の指輪" &&
+             this.level.surroundings(mx, my).include_p(this.hero.x, this.hero.y) ) {
+          if (rand() < 0.5) {
+            m.state = 'awake'
+          }
+        }
+        return new Action('rest', null)
+
+      case 'awake':
+        // ジェネリックな行動パターン。
+
+        if (m.paralyzed_p())
+          return new Action('rest', null)
+
+        else if (m.asleep_p())
+          return new Action('rest', null)
+
+        else if (!m.nullified_p() && m.bomb_p() && m.hp <= m.max_hp.div(2))
+          return new Action('rest', null)
+
+        else if (m.confused_p())
+          return this.monster_confused_action(m, mx, my)
+
+        else if (m.blind_p())
+          return this.monster_blind_action(m, mx, my)
+
+        else if (!m.nullified_p() && m.hallucinating_p() ) // まどわし状態では攻撃しない。
+          return this.monster_move_action(m, mx, my)
+
+        else if (!m.nullified_p() && m.tipsy_p() && rand() < 0.5 ) // ちどり足。
+          return this.monster_tipsy_move_action(m, mx, my)
+
+        else if ( this.adjacent_p([mx, my], [this.hero.x, this.hero.y]) &&
+                  this.level.cell(this.hero.x, this.hero.y).item?.name == "結界の巻物" )
+          return this.monster_move_action(m, mx, my) // new Action('rest', null)
+
+        else if (!m.nullified_p() && this.trick_applicable_p(m) && rand() < m.trick_rate)
+          return new Action('trick', null)
+
+        else if (this.level.can_attack_p(m, mx, my, this.hero.x, this.hero.y)) {
+          // * ヒーローに隣接していればヒーローに攻撃。
+          if (m.name == "動くモアイ像")
+            m.status_effects.reject_d(x => x.type == 'held')
+
+          return new Action('attack', Vec.minus([this.hero.x, this.hero.y], [mx, my]))
+        } else
+          return this.monster_move_action(m, mx, my)
+
+      default:
+        throw new Error
+      }
+    }
+  }
+
+  // 位置 v1 と v2 は縦・横・ナナメのいずれかの線が通っている。
+  aligned_p(v1, v2)
+  {
+    const diff = Vec.minus(v1, v2)
+    return diff[0] === 0 ||
+           diff[1] === 0 ||
+           diff[0].abs() == diff[1].abs()
+  }
+
+  // モンスターの特技が使える位置にヒーローが居るか？
+  trick_in_range_p(m, mx, my)
+  {
+    switch ( m.trick_range ) {
+    case 'none':
+      return false
+
+    case 'sight':
+      return this.level.fov(mx, my).include_p(this.hero.x, this.hero.y)
+
+    case 'line':
+      return ( this.level.fov(mx, my).include_p(this.hero.x, this.hero.y) &&
+               this.aligned_p([mx, my], [this.hero.x, this.hero.y]) )
+    case 'reach':
+      return ( this.level.can_attack_p(m, mx, my, this.hero.x, this.hero.y) )
+
+    default:
+      throw new Error
+    }
+  }
+
+  // 特技を使う条件が満たされているか？
+  trick_applicable_p(m)
+  {
+    const [mx, my] = this.level.coordinates_of(m)
+    let able
+    switch ( m.name ) {
+    case "目玉":
+      able = !this.hero.confused_p()
+      break
+    case "白い手":
+      able = !this.hero.held_p()
+      break
+    case "どろぼう猫":
+      able = !m.hallucinating_p()
+      break
+    default:
+      able = true
+    }
+
+    return this.trick_in_range_p(m, mx, my) && able
+  }
+
+  // モンスターの移動・行動フェーズ。
+  monster_phase()
+  {
+    // 移動フェーズ。
+    const doers = []
+    this.level.all_monsters_with_position.each(
+      ( [m, mx, my] ) => {
+        if (m.action_point < 2)
+          return
+
+        const action = this.monster_action(m, mx, my)
+        if (action.type == 'move') {
+          // その場で動かす。
+          this.monster_move(m, mx, my, action.direction)
+          m.action_point -= 2
+        } else {
+          doers.push( [m, action] )
+        }
+      }
+    )
+
+    // 行動フェーズ。
+    doers.each(
+      ( [m, action] ) => {
+        if (m.hp < 1.0)
+          return
+
+        this.dispatch_action(m, action)
+        if (m.single_attack_p()) {
+          // 攻撃するとAPを使いはたす。
+          m.action_point = 0
+        } else {
+          m.action_point -= 2
+        }
+      }
+    )
+  }
+
   async play()
   {
     this.start_time = new Date
@@ -1336,9 +2068,12 @@ class Program
           case 'action':
             break
           case 'nothing':
+            console.log('nothing')
             this.hero.action_point = old
           }
+          console.log("hoge")
         } else if (this.all_monsters_moved_p()) {
+          console.log('next_turn')
           this.next_turn()
         } else {
           if (this.hero.ring?.name == "退魔の指輪") {
@@ -1353,6 +2088,7 @@ class Program
               }
             })
           }
+          console.log('monster_phase')
           this.monster_phase()
         }
       }
@@ -1591,6 +2327,35 @@ window.addEventListener('load', async () => {
   STDIN = ttyInputPort
   STDOUT = ttyOutputPort
   const prog = new Program()
-  await prog.main()
+  try {
+    await prog.main()
+  } finally {
+    for (let i = Finalizers.length - 1; i >= 0; i--)
+      Finalizers[i]()
+  }
   //ttyOutputPort.writeChar("[Program Exited]")
 });
+
+Array.prototype.include_p = function(val) {
+  return this.some(elt => elt === val)
+}
+
+Number.prototype.to_i = function()
+{
+  return Math.floor(this)
+}
+
+Array.prototype.shuffle = function() {
+  const indices = new Array(this.length)
+  for (let i = 0; i < this.length; i++)
+    indices[i] = i
+
+  const res = []
+  while (indices.length > 0) {
+    const j = Math.floor( Math.random() * indices.length )
+    res.push( this[indices[j]] )
+    indices.splice(j, 1)
+  }
+
+  return res
+}

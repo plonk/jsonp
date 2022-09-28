@@ -69,7 +69,6 @@ class Sound {
 
   static async play(tune) {
     print(tune.tune)
-    print(tune.duration / 1000)
     await sleep(tune.duration / 1000)
   }
 }
@@ -202,7 +201,7 @@ class SoundEffects extends Sound {
   static async trapdoor()
   {
     const tune = this.compile([
-      ... new Range(18, 30).to_a().reverse().map(offset => ['note', 50, offset, 40] )
+      ... new Range(18, 30).to_a().reverse().map(offset => ['note', 50, offset, 40] ),
       ['note', 50, 17, 40],
       ['note', 50, 18, 40],
       ['note', 50, 17, 40],
@@ -317,7 +316,7 @@ class SoundEffects extends Sound {
                      ['note', 15, 'b3', 40],
                      ['note', 15, 'a3', 40],
                      ['rest', 50],
-                   ] * 4)
+                   ].times(4))
     await this.play(tune)
   }
 

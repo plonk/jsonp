@@ -175,7 +175,7 @@ class Rect
 
   include_p(x, y)
   {
-    return x >= left && x <= right && y >= top && y <= bottom
+    return x >= this.left && x <= this.right && y >= this.top && y <= this.bottom
   }
 }
 
@@ -416,6 +416,51 @@ class Level
     )
   }
 
+  passable_p(x, y)
+  {
+    if (! ( x.between_p(0, this.width - 1) && y.between_p(0, this.height - 1) )) {
+      // 画面外
+      return false
+    }
+
+    return (this.dungeon[y][x].type == 'FLOOR' || this.dungeon[y][x].type == 'PASSAGE')
+  }
+
+  // ナナメ移動を阻害しないタイル。
+  uncornered_p(x, y)
+  {
+    if (! ( x.between_p(0, this.width - 1) && y.between_p(0, this.height - 1) ) ) {
+      // 画面外
+      return false
+    }
+
+    return (this.dungeon[y][x].type == 'FLOOR' ||
+            this.dungeon[y][x].type == 'PASSAGE' ||
+            this.dungeon[y][x].type == 'STATUE')
+  }
+
+  room_at(x, y)
+  {
+    for (const room of this.rooms) {
+      if (room.properly_in_p(x, y))
+        return room
+    }
+    return null
+  }
+
+  room_exits(room)
+  {
+    const res = []
+    const rect = new Rect(room.top, room.bottom, room.left, room.right)
+    rect.each_coords(
+      ([x, y]) => {
+        if (this.dungeon[y][x].type == 'PASSAGE')
+          res.push( [x, y])
+      }
+    )
+    return res
+  }
+
   first_visible_object(x, y, visible_p)
   {
     return this.dungeon[y][x].first_visible_object(this.whole_level_lit, visible_p)
@@ -495,15 +540,6 @@ class Level
     this.dungeon[y][x].put_object(object)
   }
 
-  room_at(x, y)
-  {
-    for (const room of this.rooms) {
-      if (room.properly_in_p(x, y))
-        return room
-    }
-    return null
-  }
-
   in_dungeon_p(x, y)
   {
     return x.between_p(0, this.width-1) && y.between_p(0, this.height-1)
@@ -557,6 +593,8 @@ Number.prototype.between_p = function(left, right_inclusive) {
 Array.prototype.each = function(f){
   for (const elt of this)
     f(elt)
+
+  return this
 }
 
 Array.prototype.max = function(){
