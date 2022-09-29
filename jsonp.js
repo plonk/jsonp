@@ -269,93 +269,6 @@ const Curses = {
 
 Curses.stdscr = new Curses.Window(24, 80, 0, 0)
 
-class Menu
-{
-  constructor(items, opts = {})
-  {
-    this.items = items
-    this.y = opts.y || 0
-    this.x = opts.x || 0
-    this.cols = opts.cols || 25
-    this.index = 0
-    const winheight = Math.max(3, this.items.length + 2)
-    this.win = new Curses.Window(winheight, this.cols, this.y, this.x)
-    this.win.keypad(true)
-    this.dispfunc = opts.dispfunc || ((win, data) => {
-      win.addstr(data.to_s())
-    })
-    this.title = opts.title || ""
-    this.sortable = opts.sortable || false
-  }
-
-  async choose()
-  {
-    this.win.clear()
-    this.win.rounded_box()
-    this.win.setpos(0, 1)
-    this.win.addstr(this.title)
-
-    if (this.items.length == 0)
-    {
-      this.win.setpos(1,1)
-      this.win.attron(Curses.A_BOLD)
-      this.win.addstr(" 何も持っていない")
-      this.win.attroff(Curses.A_BOLD)
-      this.win.setpos(1, 1)
-      this.win.refresh()
-      await this.win.getch()
-      return ["cancel"]
-    } else {
-        console.log('piyo')
-      while (true) {
-        console.log('fuga')
-        for (let i = 0; i < this.items.length; i++) {
-          this.win.setpos(i + 1, 1)
-          if (i == this.index)
-            this.win.attron(Curses.A_BOLD)
-
-          this.win.addstr(" ")
-          this.dispfunc.apply(null, [this.win, this.items[i]])
-          if (i == this.index)
-            this.win.attroff(Curses.A_BOLD)
-        }
-
-        this.win.setpos(this.index + 1, 1)
-        console.log('hoge')
-        const c = await this.win.getch()
-        console.log(JSON.stringify(c))
-
-        switch (c)
-        {
-          case 'j':
-          case Curses.KEY_DOWN:
-          this.index = (this.index + 1).mod(this.items.length)
-          break
-
-          case 'k':
-          case Curses.KEY_UP:
-          this.index = (this.index - 1).mod(this.items.length)
-          break
-
-          case 's':
-          if (this.sortable)
-            return ['sort']
-
-          break
-
-          case 'q':
-          return ['cancel']
-          break
-
-          case '\n':
-          return ['chosen', this.items[this.index]]
-          break
-        }
-      }
-    }
-  }
-}
-
 const NamingScreen = {
   COMMAND_ROW: ["かなカナ英数", "おまかせ", "けす", "おわる"],
 
@@ -745,7 +658,7 @@ class Program
     this.last_message = ""
     this.last_message_shown_at = new Date
 
-   // this.naming_table = this.create_naming_table()
+    this.naming_table = this.create_naming_table()
   }
 
   // 状態異常が解けた時のメッセージ。
@@ -1521,6 +1434,124 @@ class Program
     return ["nicknamed", kind_label, ":", this.naming_table.nickname(item.name)]
   }
 
+  // 持ち物メニューを開く。
+  // () → :action | :nothing
+  async open_inventory()
+  {
+    const dispfunc = (win, item) => {
+      const prefix = (this.hero.weapon === item ||
+                      this.hero.shield === item ||
+                      this.hero.ring === item ||
+                      this.hero.projectile === item) ? "E" : " "
+      this.addstr_ml(win, ["span", prefix, item.char, this.display_item(item)])
+    }
+    let menu = null
+    let item = null
+    let c = null
+
+    try {
+      while (true) {
+        item = c = null
+        menu = new Menu(this.hero.inventory,
+                              { y: 1, x: 0, cols: 28,
+                                dispfunc: dispfunc,
+                                title: "持ち物 [s]ソート",
+                                sortable: true })
+        await this.render()
+        const [command, ... args] = await menu.choose()
+
+        switch ( command ) {
+        case  'cancel':
+          //Curses.beep()
+          return 'nothing'
+        case  'chosen':
+          item = args[0]
+
+          c = await this.item_action_menu(item)
+          if (!c)
+            continue
+          break
+        case  'sort':
+          this.hero.sort_inventory()
+          break
+        }
+
+        if (item && c)
+          break
+      }
+
+      switch (c) {
+      case "置く":
+        this.try_place_item(item)
+        break
+
+      case "投げる":
+        return this.throw_item(item)
+
+      case "食べる":
+        this.eat_food(item)
+        break
+
+      case "飲む":
+        return this.take_herb(item)
+
+      case "装備":
+        this.equip(item)
+        break
+
+      case "読む":
+        return this.read_scroll(item)
+
+      case "ふる":
+        return this.zap_staff(item)
+
+      default:
+        this.log(`case not covered: ${item}を${c}。`)
+        break
+      }
+      return 'action'
+    } finally {
+      menu?.close()
+    }
+  }
+
+  async item_action_menu(item)
+  {
+    const action_menu = new Menu(this.actions_for_item(item), { y: 1, x: 27, cols: 9 })
+    try {
+      const [c, ...args] = await action_menu.choose()
+      switch ( c ) {
+      case 'cancel':
+        return null
+      case 'chosen':
+        c = args[0]
+        if (c == "説明") {
+          this.describe_item(item)
+          return null
+        } else if (c == "名前") {
+          await this.render()
+          let nickname
+          if (this.naming_table.state(item.name) == 'nicknamed')
+            nickname = this.naming_table.nickname(item.name)
+          else
+            nickname = null
+
+          nickname = NamingScreen.run(nickname)
+          this.naming_table.set_nickname(item.name, nickname)
+          return null
+        } else {
+          return c
+        }
+      default:
+        throw new Error
+      }
+    } finally {
+      action_menu.close()
+    }
+  }
+
+// ...
+
   hero_walk(x1, y1, picking)
   {
     if (this.level.cell(x1, y1).item?.mimic) {
@@ -2107,6 +2138,7 @@ class Program
       ml = win
       win = Curses
     }
+    console.log({ml})
 
     if (typeof(ml) == 'string') {
       win.addstr(ml)
@@ -2177,6 +2209,57 @@ class Program
     default:
       throw new Error("unknown tag " + tag)
     }
+  }
+
+  create_naming_table()
+  {
+    return (this.hard_mode) ?
+      this.create_naming_table_hard_mode() :
+      this.create_naming_table_easy_mode()
+  }
+
+  create_naming_table_easy_mode()
+  {
+    const table = this.create_naming_table_hard_mode()
+    table.true_names.each(name => table.identify(name))
+    return table
+  }
+
+  create_naming_table_hard_mode()
+  {
+    const get_item_names_by_kind =
+          specified => Item.ITEMS.filter( ([kind, name, number, desc]) => kind == specified ).map( ([_kind, name, _number, _desc]) => name )
+
+    const take_strict = (n, arr) => {
+      if ( arr.length < n )
+        throw new Error("list too short")
+      return arr.take(n)
+    }
+
+    let herbs_false   = ["黒い草", "白い草", "赤い草", "青い草", "黄色い草", "緑色の草",
+                         "まだらの草", "スベスベの草", "チクチクの草", "空色の草", "しおれた草",
+                         "くさい草", "茶色い草", "ピンクの草"]
+    let scrolls_false = ["αの巻物", "βの巻物", "γの巻物", "δの巻物", "εの巻物", "ζの巻物", "ηの巻物", "θの巻物",
+                         "ιの巻物", "κの巻物", "λの巻物", "μの巻物", "νの巻物", "ξの巻物", "οの巻物", "πの巻物",
+                         "ρの巻物", "σの巻物", "τの巻物", "υの巻物", "φの巻物", "χの巻物", "ψの巻物", "ωの巻物"]
+    let staves_false  = ["鉄の杖", "銅の杖", "鉛の杖", "銀の杖", "金の杖", "アルミの杖", "真鍮の杖",
+                         "ヒノキの杖", "杉の杖", "桜の杖", "松の杖", "キリの杖", "ナラの杖", "ビワの杖"]
+    let rings_false   = ["金剛石の指輪", "翡翠の指輪", "猫目石の指輪", "水晶の指輪", // "タイガーアイの指輪",
+                         "瑪瑙の指輪", "天河石の指輪","琥珀の指輪","孔雀石の指輪","珊瑚の指輪","電気石の指輪",
+                         "真珠の指輪","葡萄石の指輪","蛍石の指輪","紅玉の指輪","フォーダイトの指輪", "黒曜石の指輪"]
+
+    const herbs_true   = get_item_names_by_kind('herb')
+    const scrolls_true = get_item_names_by_kind('scroll')
+    const staves_true  = get_item_names_by_kind('staff')
+    const rings_true   = get_item_names_by_kind('ring')
+
+    herbs_false   = take_strict(herbs_true.length, herbs_false.shuffle())
+    scrolls_false = take_strict(scrolls_true.length, scrolls_false.shuffle())
+    staves_false  = take_strict(staves_true.length, staves_false.shuffle())
+    rings_false   = take_strict(rings_true.length, rings_false.shuffle())
+
+    return new NamingTable(herbs_false.concat(scrolls_false, staves_false, rings_false),
+                           herbs_true.concat(scrolls_true, staves_true, rings_true))
   }
 
   // ヒーロー this.hero が item を拾おうとする。
@@ -2873,10 +2956,20 @@ Array.prototype.reject = function(f)
 Array.prototype.index = function(value)
 {
   console.log('index', value)
+  console.log(this)
   const i = this.findIndex( elt => eql_p(elt,value) )
   console.log('i', i)
   if (i == -1)
     return null
   else
     return i
+}
+
+Array.prototype.take = function(n)
+{
+  const arr = []
+  n = Math.min(n, this.length)
+  for (let i = 0; i < n; i++)
+    arr.push(this[i])
+  return arr
 }

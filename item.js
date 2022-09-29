@@ -299,7 +299,7 @@ class Item
 
   to_s()
   {
-    ws_num_fmt = (r) => {
+    const ws_num_fmt = (r) => {
       if (r === null || r === undefined)
         return "?"
       else if (r == 0)
