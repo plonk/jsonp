@@ -292,7 +292,7 @@ class Monster extends StatusEffectPredicates
     })[this._name] || 0.0
   }
 
-  get single_attack_p()
+  single_attack_p()
   {
     switch ( this._name ) {
     case "ツバメ": case "四人トリオ":

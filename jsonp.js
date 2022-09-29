@@ -912,6 +912,215 @@ class Program
     }
   }
 
+  // ...
+
+  // # 敵の攻撃力から、実際にヒーローが受けるダメージを計算する。
+  // def attack_to_hero_damage(attack)
+  //   return ( ( attack * (15.0/16.0)**get_hero_defense ) * (112 + rand(32))/128.0 ).to_i
+  // end
+
+  // def monster_attacks_hero(m)
+  //   attack = get_monster_attack(m)
+
+  //   if attack == 0
+  //     log("#{display_character(m)}は 様子を見ている。")
+  //   else
+  //     log("#{display_character(m)}の こうげき！ ")
+  //     if rand() < 0.125
+  //       SoundEffects.miss
+  //       log("#{@hero.name}は ひらりと身をかわした。")
+  //     else
+  //       SoundEffects.hit
+  //       damage = attack_to_hero_damage(attack)
+  //       take_damage(damage)
+  //     end
+  //   end
+  // end
+
+  // モンスターが攻撃する。
+  monster_attack(assailant, dir)
+  {
+    const [mx, my] = this.level.coordinates_of(assailant)
+    const target = Vec.plus([mx, my], dir)
+    const defender = this.level.cell(... target).monster
+
+    if (this.hero.pos.eql_p(target)) {
+      this.monster_attacks_hero(assailant)
+    } else if (defender) {
+      const attack = this.get_monster_attack(assailant)
+      const damage = ( ( attack * Math.pow(15.0/16.0, defender.defense) ) * (112 + rand(32))/128.0 ).to_i()
+
+      if (attack === 0) {
+        this.log("${assailant.name}は 様子を見ている。")
+      } else {
+        this.log("${assailant.name}の こうげき！ ")
+        this.on_monster_attacked(defender)
+        this.monster_take_damage(defender, damage, this.level.cell(... target))
+      }
+    }else {
+      // 誰もいない
+    }
+  }
+
+  // # モンスターが特技を使用する。
+  // def monster_trick(m)
+  //   case m.name
+  //   when '催眠術師'
+  //     log("#{m.name}は 手に持っている物を 揺り動かした。")
+  //     SoundEffects.magic
+  //     hero_fall_asleep
+  //   when 'ファンガス'
+  //     log("#{m.name}は 毒のこなを 撒き散らした。")
+  //     take_damage_strength(1)
+  //   when 'ノーム'
+  //     potential = rand(250..1500)
+  //     actual = [potential, @hero.gold].min
+  //     if actual == 0
+  //       log("#{@hero.name}は お金を持っていない！ ")
+  //     else
+  //       log("#{m.name}は #{actual}ゴールドを盗んでワープした！ ")
+
+  //       @hero.gold -= actual
+  //       m.item = Gold.new(actual)
+
+  //       unless m.hallucinating?
+  //         m.status_effects << StatusEffect.new(:hallucination, Float::INFINITY)
+  //       end
+
+  //       monster_teleport(m, @level.cell(*@level.coordinates_of(m)))
+  //     end
+  //   when "白い手"
+  //     if !@hero.held?
+  //       log("#{m.name}は #{@hero.name}の足をつかんだ！ ")
+  //       effect = StatusEffect.new(:held, 10)
+  //       effect.caster = m
+  //       @hero.status_effects << effect
+  //     end
+
+  //   when "ピューシャン"
+  //     mx, my = @level.coordinates_of(m)
+  //     dir = Vec.normalize(Vec.minus([@hero.x, @hero.y], [mx, my]))
+  //     arrow = Item.make_item("木の矢")
+  //     arrow.number = 1
+  //     monster_throw_item(m, arrow, mx, my, dir)
+
+  //   when "アクアター"
+  //     log("#{m.name}は 酸を浴せた。")
+  //     if @hero.shield
+  //       take_damage_shield
+  //     end
+
+  //   when "パペット"
+  //     log("#{m.name}は おどりをおどった。")
+  //     if @hero.puppet_resistent?
+  //       log("しかし #{@hero.name}は平気だった。")
+  //     else
+  //       hero_levels_down
+  //     end
+
+  //   when "土偶"
+  //     if rand() < 0.5
+  //       log("#{m.name}が #{@hero.name}のちからを吸い取る！")
+  //       if @hero.puppet_resistent?
+  //         log("しかし #{@hero.name}は平気だった。")
+  //       else
+  //         take_damage_max_strength(1)
+  //       end
+  //     else
+  //       log("#{m.name}が #{@hero.name}の生命力を吸い取る！")
+  //       if @hero.puppet_resistent?
+  //         log("しかし #{@hero.name}は平気だった。")
+  //       else
+  //         take_damage_max_hp(5)
+  //       end
+  //     end
+
+  //   when "目玉"
+  //     log("目玉は#{@hero.name}を睨んだ！")
+  //     unless @hero.confused?
+  //       @hero.status_effects.push(StatusEffect.new(:confused, 10))
+  //       log("#{@hero.name}は 混乱した。")
+  //     end
+
+  //   when "どろぼう猫"
+  //     candidates = @hero.inventory.reject { |x| @hero.equipped?(x) }
+
+  //     if candidates.any?
+  //       item = candidates.sample
+  //       @hero.remove_from_inventory(item)
+  //       m.item = item
+  //       log("#{m.name}は ", display_item(item), "を盗んでワープした。")
+
+  //       unless m.hallucinating?
+  //         m.status_effects << StatusEffect.new(:hallucination, Float::INFINITY)
+  //       end
+
+  //       monster_teleport(m, @level.cell(*@level.coordinates_of(m)))
+  //     else
+  //       log("#{@hero.name}は 何も持っていない。")
+  //     end
+
+  //   when "竜"
+  //     mx, my = @level.coordinates_of(m)
+  //     dir = Vec.normalize(Vec.minus([@hero.x, @hero.y], [mx, my]))
+  //     log("#{m.name}は 火を吐いた。")
+  //     breath_of_fire(m, mx, my, dir)
+
+  //   when "ソーサラー"
+  //     log("#{m.name}は ワープの杖を振った。")
+  //     SoundEffects.magic
+  //     wait_delay
+  //     hero_teleport
+
+  //   else
+  //     fail
+  //   end
+  // end
+
+  // # ヒーローがちからの最大値にダメージを受ける。
+  // def take_damage_max_strength(amount)
+  //   fail unless amount == 1
+  //   if @hero.raw_max_strength <= 1
+  //     log("#{@hero.name}の ちからは これ以上さがらない。")
+  //   else
+  //     @hero.raw_max_strength -= 1
+  //     @hero.raw_strength = [@hero.raw_strength, @hero.raw_max_strength].min
+  //     log("#{@hero.name}の ちからの最大値が 下がった。")
+  //   end
+  // end
+
+  // # ヒーローが最大HPにダメージを受ける。
+  // def take_damage_max_hp(amount)
+  //   @hero.max_hp = [@hero.max_hp - amount, 1].max
+  //   @hero.hp = [@hero.hp, @hero.max_hp].min
+  //   log("#{@hero.name}の 最大HPが 減った。")
+  // end
+
+  // モンスターが移動する。
+  monster_move(m, mx, my, dir)
+  {
+    this.level.cell(mx, my).remove_object(m)
+    this.level.cell(mx + dir[0], my + dir[1]).put_object(m)
+    m.facing = dir
+  }
+
+  // move 以外のアクションを実行。
+  dispatch_action(m, action)
+  {
+    switch ( action.type ) {
+    case 'attack':
+      this.monster_attack(m, action.direction)
+      break
+    case 'trick':
+      this.monster_trick(m)
+      break
+    case 'rest':
+      // 何もしない。
+      break
+    default:
+    }
+  }
+
   // 行動により満腹度が消費される。満腹度が無い時はHPが減る。
   hero_fullness_decrease()
   {
@@ -1095,6 +1304,49 @@ class Program
     }
   }
 
+  // 取扱説明。
+  // () → 'nothing'
+  async help()
+  {
+    const text =
+          [
+            '★ キャラクターの移動',
+            '',
+            '     y k u',
+            '     h @ l',
+            '     b j n',
+            '',
+            '★ コマンドキー',
+            '',
+            '     [Enter] 決定。周りを調べる。',
+            '     [Shift] ダッシュ。アイテムの上に乗る。',
+            '     s       メニューを開く。',
+            '     i       道具一覧を開く。',
+            '     >       階段を降りる。足元のワナを踏む、',
+            '             アイテムを拾う。',
+            '     ,       足元を調べる。',
+            '     .       周りを調べる。',
+            '     ?       このヘルプを表示。',
+            '     Ctrl+P  メッセージ履歴。',
+            '     t       装備している投げ物を使う。',
+            '     q       キャンセル。',
+            '     Q       冒険をあきらめる。',
+          ]
+
+    const win = new Curses.Window(23, 50, 1, 4) // lines, cols, y, x
+    win.clear()
+    win.rounded_box()
+    text.forEach( (line, i) => {
+      const y = i + 1
+      win.setpos(y, 1)
+      win.addstr(line)
+    })
+    await win.getch()
+    win.close()
+
+    return 'nothing'
+  }
+
   // 移動キー定義。
   static KEY_TO_DIRVEC = {
     'h': [-1,  0],
@@ -1168,7 +1420,7 @@ class Program
     const shifted = ('H J K L Y U B N 7 8 9 4 6 1 2 3'.split(' ').concat([Curses.KEY_SLEFT, Curses.KEY_SRIGHT, Curses.KEY_SR, Curses.KEY_SF])).include_p(c)
 
     if (this.hero.confused_p())
-      vec = DIRECTIONS.sample()
+      vec = Program.DIRECTIONS.sample()
 
     const target = Vec.plus(this.hero.pos, vec)
     if (!this.hero_can_move_to_p(target))
@@ -1531,6 +1783,57 @@ class Program
     const c = Curses.getch()
     Curses.curs_set(1)
     return c
+  }
+
+  //  十字路、T字路で止まる。
+  fork_p(point)
+  {
+    if (this.level.room_at(... point))
+      return false
+
+    if ( ![[-1,-1],[+1,-1],[-1,+1],[+1,+1],[-1,0],[0,-1],[+1,0],[0,+1]]
+         .every(d => this.level.in_dungeon_p(... Vec.plus(point,d))) )
+      return false
+
+    if ( ![[-1,0],[0,-1],[+1,0],[0,+1]].count(d => this.level.cell(... Vec.plus(point,d)).type == 'PASSAGE' || this.level.cell(... Vec.plus(point,d)).type == 'FLOOR') >= 3 )
+      return false
+
+    return true
+  }
+
+  should_keep_dashing_p()
+  {
+    const target = Vec.plus(this.hero.pos, this.dash_direction)
+    const index = DIRECTIONS.index(this.dash_direction)
+    const forward_area = new Range(-2, +2).to_a().map(
+      ioff => Vec.plus(this.hero.pos, DIRECTIONS[(index+ioff) % 8])
+    )
+
+    // if (this.hero.status_effects.length > 0)
+    //   return false
+    if (!hero_can_move_to_p(target))
+      return false
+    else if (this.level.cell(... target).monster) // ありえなくない？
+      return false
+    else if (forward_area.some(([x,y]) => {
+      const cell = this.level.cell(x,y)
+      return (cell.staircase ||
+              cell.item ||
+              cell.gold ||
+              (cell.trap && this.trap_visible_to_hero(cell.trap)) ||
+              cell.monster ||
+              cell.type == 'STATUE')
+    }))
+      return false
+    else if (current_room && this.level.first_cells_in(current_room).include_p(this.hero.pos))
+      return false
+    else if (!current_room && this.level.room_at(... target) &&
+             this.level.first_cells_in(this.level.room_at(... target)).include_p(target))
+      return false
+    else if (this.fork_p(this.hero.pos))
+      return false
+    else
+      return true
   }
 
   hero_dash()
@@ -2012,6 +2315,176 @@ class Program
     return this.trick_in_range_p(m, mx, my) && able
   }
 
+  // (Monster, Integer, Integer) → Action
+  monster_move_action(m, mx, my)
+  {
+    // 動けない。
+    if (m.held_p()) {
+      return new Action('rest', null)
+    }
+
+    // * モンスターの視界内にヒーローが居れば目的地を再設定。
+    if (!(!m.nullified_p() && m.hallucinating_p()) && this.level.fov(mx, my).include_p(this.hero.x, this.hero.y)) {
+      m.goal = [this.hero.x, this.hero.y]
+    }
+
+    // * 目的地がある場合...
+    if (m.goal) {
+      // * 目的地に到着していれば目的地をリセット。
+      if (m.goal.eql_p( [mx, my] )) {
+        m.goal = null
+      }
+    }
+
+    if (m.goal) {
+      // * 目的地があれば目的地へ向かう。(方向のpreferenceが複雑)
+      const dir = Vec.normalize(Vec.minus(m.goal, [mx, my]))
+      const i = Program.DIRECTIONS.index(dir)
+      ;[i, ...[i - 1, i + 1].shuffle(), ...[i - 2, i + 2].shuffle()].map(j => Program.DIRECTIONS[j % 8]).each( ([dx, dy]) => {
+        if (this.level.can_move_to_p(m, mx, my, mx+dx, my+dy) &&
+           ![mx+dx, my+dy].eql_p( [this.hero.x, this.hero.y] )&&
+           this.level.cell(mx+dx, my+dy).item?.name != "結界の巻物") {
+          return new Action('move', [dx, dy])
+        }
+      })
+
+      // 目的地に行けそうもないのであきらめる。(はやっ!)
+      m.goal = null
+      return new Action('rest', null)
+    } else {
+      // * 目的地が無ければ...
+
+      // * 部屋の中に居れば、出口の1つを目的地に設定する。
+      const room = this.level.room_at(mx, my)
+      if (room) {
+        const exit_points = this.level.room_exits(room)
+        const preferred = exit_points.reject(
+          ([x,y]) => [x,y].eql_p( [mx - m.facing[0], my - m.facing[1]]) // 今入ってきた出入口は除外する。
+        )
+        if (preferred.length > 0) {
+          m.goal = preferred.sample()
+          return this.monster_action(m, mx, my)
+        } else if (exit_points.length > 0) {
+          // 今入ってきた出入口でも選択する。
+          m.goal = exit_points.sample()
+          return this.monster_action(m, mx, my)
+        } else {
+          return new Action('rest', null) // どうすりゃいいんだい
+        }
+      } else {
+        // * 部屋の外に居れば
+
+        // * 反対以外の方向に進もうとする。
+        const dirs = [
+          Vec.rotate_clockwise_45(m.facing, +2),
+          Vec.rotate_clockwise_45(m.facing, -2),
+          Vec.rotate_clockwise_45(m.facing, +1),
+          Vec.rotate_clockwise_45(m.facing, -1),
+          Vec.rotate_clockwise_45(m.facing,  0),
+        ].shuffle()
+        dirs.each( ([dx, dy]) => {
+          if (this.level.can_move_to_p(m, mx, my, mx+dx, my+dy) &&
+              ![mx+dx, my+dy].eql_p( [this.hero.x, this.hero.y] ) &&
+              this.level.cell(mx+dx, my+dy).item?.name != "結界の巻物") {
+            return new Action('move', [dx,dy])
+          }
+        })
+
+        // * 進めなければその場で足踏み。反対を向く。
+        m.facing = Vec.negate(m.facing)
+        return new Action('rest', null)
+      }
+    }
+  }
+
+  // (Monster, Integer, Integer) → Action
+  monster_tipsy_move_action(m, mx, my)
+  {
+    const candidates = []
+    const rect = this.level.surroundings(mx, my)
+    rect.each_coords( (x, y) => {
+      if ( !(this.level.in_dungeon_p(x, y) &&
+             (this.level.cell(x, y).type == 'FLOOR' ||
+              this.level.cell(x, y).type == 'PASSAGE')) )
+        return
+
+      if (![x,y].eql_p( [this.hero.x,this.hero.y] ) &&
+          this.level.can_move_to_p(m, mx, my, x, y) &&
+          this.level.cell(x, y).item?.name != "結界の巻物")
+        candidates.push( [x, y] )
+    })
+
+    if (candidates.length > 0) {
+      const [x, y] = candidates.sample()
+      return new Action('move', [x - mx, y - my])
+    } else {
+      return new Action('rest', null)
+    }
+  }
+
+  // def monster_confused_action(m, mx, my)
+  //   candidates = []
+  //   rect = @level.surroundings(mx, my)
+  //   rect.each_coords do |x, y|
+  //     next unless @level.in_dungeon?(x, y) &&
+  //                 (@level.cell(x, y).type == :FLOOR ||
+  //                  @level.cell(x, y).type == :PASSAGE)
+  //     if @level.can_move_to_terrain?(m, mx, my, x, y) &&
+  //        @level.cell(x, y).item&.name != "結界の巻物"
+  //       candidates << [x, y]
+  //     end
+  //   end
+  //   if candidates.any?
+  //     x, y = candidates.sample
+  //     if [x,y] == @hero.pos || @level.cell(x,y).monster
+  //       return Action.new(:attack, [x-mx, y-my])
+  //     else
+  //       return Action.new(:move, [x - mx, y - my])
+  //     end
+  //   else
+  //     return Action.new(:rest, nil)
+  //   end
+  // end
+
+  // def monster_blind_action(m, mx, my)
+  //   target = nil
+  //   dx, dy = m.facing
+  //   applicable_p = lambda { |x, y|
+  //     if @level.in_dungeon?(x,y) &&
+  //        (@level.cell(x,y).type==:FLOOR || @level.cell(x,y).type==:PASSAGE) &&
+  //        @level.can_move_to_terrain?(m, mx, my, x, y) &&
+  //        @level.cell(x,y).item&.name != "結界の巻物"
+  //       true
+  //     else
+  //       false
+  //     end
+  //   }
+  //   attack_or_move = lambda { |x, y|
+  //     if [x,y] == @hero.pos || @level.cell(x,y).monster
+  //       return Action.new(:attack, [x-mx, y-my])
+  //     else
+  //       return Action.new(:move, [x-mx, y-my])
+  //     end
+  //   }
+
+  //   if applicable_p.(mx+dx, my+dy)
+  //     return attack_or_move.(mx+dx, my+dy)
+  //   else
+  //     candidates = []
+  //     @level.surroundings(mx, my).each_coords do |x, y|
+  //       if applicable_p.(x, y)
+  //         candidates << [x,y]
+  //       end
+  //     end
+
+  //     if candidates.any?
+  //       x, y = candidates.sample
+  //       m.facing = [x-mx, y-my]
+  //     end
+  //     return Action.new(:rest, nil)
+  //   end
+  // end
+
   // モンスターの移動・行動フェーズ。
   monster_phase()
   {
@@ -2336,8 +2809,17 @@ window.addEventListener('load', async () => {
   //ttyOutputPort.writeChar("[Program Exited]")
 });
 
+function eql_p(a, b)
+{
+  if (a === undefined || a === null)
+    return a === b
+  else
+    return a.eql_p(b)
+}
+
 Array.prototype.include_p = function(val) {
-  return this.some(elt => elt === val)
+  console.log(this)
+  return this.some(elt => eql_p(elt, val))
 }
 
 Number.prototype.to_i = function()
@@ -2358,4 +2840,43 @@ Array.prototype.shuffle = function() {
   }
 
   return res
+}
+
+Array.prototype.eql_p = function(other)
+{
+  if (this === other)
+    return true
+
+  if (!(other instanceof Array))
+    return false
+
+  if (this.length != other.length)
+    return false
+
+  for (let i = 0; i < this.length; i++)
+    if ( !eql_p(this[i], other[i]) )
+      return false
+
+  return true
+}
+
+Object.prototype.eql_p = function(other)
+{
+  return this.valueOf() === other
+}
+
+Array.prototype.reject = function(f)
+{
+  return this.filter(elt => !f(elt))
+}
+
+Array.prototype.index = function(value)
+{
+  console.log('index', value)
+  const i = this.findIndex( elt => eql_p(elt,value) )
+  console.log('i', i)
+  if (i == -1)
+    return null
+  else
+    return i
 }

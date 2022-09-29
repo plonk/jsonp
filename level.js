@@ -453,7 +453,7 @@ class Level
     const res = []
     const rect = new Rect(room.top, room.bottom, room.left, room.right)
     rect.each_coords(
-      ([x, y]) => {
+      (x, y) => {
         if (this.dungeon[y][x].type == 'PASSAGE')
           res.push( [x, y])
       }
@@ -505,6 +505,38 @@ class Level
       }
     }
     return res
+  }
+
+  monster_count()
+  {
+    return this.all_monsters_with_position().length
+  }
+
+  can_move_to_p(m, mx, my, tx, ty)
+  {
+    return (!this.dungeon[ty][tx].monster &&
+            Vec.chess_distance([mx, my], [tx, ty]) == 1 &&
+            this.passable_p(tx, ty) &&
+            this.uncornered_p(tx, my) &&
+            this.uncornered_p(mx, ty))
+  }
+
+  can_move_to_terrain_p(m, mx, my, tx, ty)
+  {
+    return (Vec.chess_distance([mx, my], [tx, ty]) == 1 &&
+           this.passable_p(tx, ty) &&
+           this.uncornered_p(tx, my) &&
+           this.uncornered_p(mx, ty))
+  }
+
+  can_attack_p(m, mx, my, tx, ty)
+  {
+    // m の特性によって場合分けすることもできる。
+
+    return Vec.chess_distance([mx, my], [tx, ty]) == 1 &&
+           this.passable_p(tx, ty) &&
+           this.uncornered_p(tx, my) &&
+           this.uncornered_p(mx, ty)
   }
 
   get_random_character_placeable_place()
@@ -563,6 +595,41 @@ class Level
   mark_explored(fov)
   {
     fov.each_coords((x, y) => this.dungeon[y][x].explored = true)
+  }
+
+// ...
+
+  coordinates_of_cell(cell)
+  {
+    if (! (cell instanceof Cell) )
+      throw new Error('type error')
+
+    try {
+      new Range(0, this.height, true).each( y => {
+        new Range(0,this. width, true).each( x => {
+          if (this.dungeon[y][x] === cell)
+            throw [x, y]
+        })
+      })
+    } catch (v) {
+      return v
+    }
+    return null
+  }
+
+  coordinates_of(obj)
+  {
+    try {
+      new Range(0, this.height, true).each( y => {
+        new Range(0, this.width, true).each( x => {
+          if (this.dungeon[y][x].objects.some( z => z === obj ))
+            throw [x, y]
+        })
+      })
+    } catch (v) {
+      return v
+    }
+    return null
   }
 
   darken()

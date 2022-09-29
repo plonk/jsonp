@@ -49,7 +49,7 @@ class Vec
 
   static DIRS_CLOCKWISE = [[0,-1], [1,-1], [1,0], [1,1], [0,1], [-1,1], [-1,0], [-1,-1]]
 
-  rotate_clockwise_45(dir, times)
+  static rotate_clockwise_45(dir, times)
   {
     const i = Vec.DIRS_CLOCKWISE.findIndex(_ => Vec.equals(_, dir))
     if (i === -1)
