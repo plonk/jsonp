@@ -267,7 +267,7 @@ class SoundEffects extends Sound {
     print("\x1b[50;30;247-~")
     print("\x1b[0;30;247-~")
     print("\x1b[50;30;3-~")
-    // sleep(0.12)
+    await sleep(0.12)
   }
 
   static async miss()
@@ -276,7 +276,7 @@ class SoundEffects extends Sound {
     print("\x1b[40;100;9-~")
     print("\x1b[0;25;9-~")
     print("\x1b[40;100;6-~")
-    // sleep(0.285)
+    await sleep(0.285)
   }
 
   static async footstep()

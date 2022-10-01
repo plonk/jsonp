@@ -347,10 +347,10 @@ class Item
     }
   }
 
-  actions()
+  get actions()
   {
     const basics = ["投げる", "置く"]
-    switch (type) {
+    switch (this.type) {
     case "box":
       return [].concat(basics)
       break

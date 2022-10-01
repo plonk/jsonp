@@ -55,7 +55,7 @@ class Vec
     if (i === -1)
       throw new Error( "out of range" )
 
-    const j = (i + times) % 8
+    const j = (i + times).mod(8)
     return Vec.DIRS_CLOCKWISE[j]
   }
 }

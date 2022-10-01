@@ -491,6 +491,20 @@ class Level
     return candidates.sample()
   }
 
+  // pred: Proc(cell, x, y)
+  find_random_place(pred)
+  {
+    const candidates = []
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        if (pred(this.dungeon[y][x], x, y)) {
+          candidates.push( [x, y] )
+        }
+      }
+    }
+    return candidates.sample()
+  }
+
   has_type_at(type, x, y)
   {
     return this.dungeon[y][x].objects.some(x => x instanceof type)

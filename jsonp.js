@@ -1142,7 +1142,7 @@ class Program
   {
     const old = this.hero.fullness
     if (this.hero.fullness > 0.0) {
-      if ( this.dungeon.on_return_trip_p(this.hero) ) {
+      if ( !this.dungeon.on_return_trip_p(this.hero) ) {
         this.hero.fullness -= this.hero.hunger_per_turn
         if (old >= 20.0 && this.hero.fullness <= 20.0)
           await this.log("おなかが 減ってきた。")
@@ -1772,28 +1772,28 @@ class Program
 
       switch (c) {
       case "置く":
-        this.try_place_item(item)
+        await this.try_place_item(item)
         break
 
       case "投げる":
-        return this.throw_item(item)
+        return await this.throw_item(item)
 
       case "食べる":
-        this.eat_food(item)
+        await this.eat_food(item)
         break
 
       case "飲む":
-        return this.take_herb(item)
+        return await this.take_herb(item)
 
       case "装備":
-        this.equip(item)
+        await this.equip(item)
         break
 
       case "読む":
-        return this.read_scroll(item)
+        return await this.read_scroll(item)
 
       case "ふる":
-        return this.zap_staff(item)
+        return await this.zap_staff(item)
 
       default:
         await this.log(`case not covered: ${item}を${c}。`)
@@ -1814,23 +1814,25 @@ class Program
       case 'cancel':
         return null
       case 'chosen':
-        c = args[0]
-        if (c == "説明") {
-          this.describe_item(item)
-          return null
-        } else if (c == "名前") {
-          await this.render()
-          let nickname
-          if (this.naming_table.state(item.name) == 'nicknamed')
-            nickname = this.naming_table.nickname(item.name)
-          else
-            nickname = null
+        {
+          const c = args[0]
+          if (c == "説明") {
+            await this.describe_item(item)
+            return null
+          } else if (c == "名前") {
+            await this.render()
+            let nickname
+            if (this.naming_table.state(item.name) == 'nicknamed')
+              nickname = this.naming_table.nickname(item.name)
+            else
+              nickname = null
 
-          nickname = NamingScreen.run(nickname)
-          this.naming_table.set_nickname(item.name, nickname)
-          return null
-        } else {
-          return c
+            nickname = NamingScreen.run(nickname)
+            this.naming_table.set_nickname(item.name, nickname)
+            return null
+          } else {
+            return c
+          }
         }
       default:
         throw new Error
@@ -1842,6 +1844,18 @@ class Program
 
 // ...
 
+  async describe_item(item)
+  {
+    let desc
+    if (this.naming_table.include_p(item.name) && !this.naming_table.identified_p(item.name))
+      desc = "識別されていないので、よくわからない。"
+    else
+      desc = item.desc
+
+    await this.message_window(desc, { y: 1, x: 27 })
+  }
+
+// ...
   async hero_walk(x1, y1, picking)
   {
     if (this.level.cell(x1, y1).item?.mimic) {
@@ -2587,6 +2601,41 @@ class Program
     }
   }
 
+  // アイテムに適用可能な行動
+  actions_for_item(item)
+  {
+    const actions = item.actions.slice(0)
+    if (!this.naming_table.include_p(item.name) || this.naming_table.identified_p(item.name)) {
+    } else {
+      actions.push("名前")
+    }
+
+    actions.push("説明")
+
+    return actions
+  }
+
+  // 足元にアイテムを置く。
+  async try_place_item(item)
+  {
+    if (this.level.cell(this.hero.x, this.hero.y).can_place_p()) {
+      if ((this.hero.weapon === item || this.hero.shield === item || this.hero.ring === item) && item.cursed) {
+        await this.log(this.display_item(item), "は 呪われていて 外れない！")
+        return
+      }
+
+      this.hero.remove_from_inventory(item)
+      if (item.name == "結界の巻物")
+        item.stuck = true
+
+      this.level.put_object(item, this.hero.x, this.hero.y)
+      this.update_stairs_direction()
+      await this.log(this.display_item(item), "を 置いた。")
+    } else {
+      await this.log("ここには 置けない。")
+    }
+  }
+
   // 次のレベルまでに必要な経験値。
   exp_until_next_lv()
   {
@@ -2825,6 +2874,26 @@ class Program
 
     return new NamingTable(herbs_false.concat(scrolls_false, staves_false, rings_false),
                            herbs_true.concat(scrolls_true, staves_true, rings_true))
+  }
+
+  // ヒーローがワープする。
+  async hero_teleport()
+  {
+    await SoundEffects.teleport()
+
+    const fov = this.level.fov(this.hero.x, this.hero.y)
+    let [x, y] = this.level.find_random_place(
+      (cell, x, y) => cell.type == 'FLOOR' && !cell.monster && !fov.include_p(x, y)
+    ) || [null, null]
+
+    if (x === null) {
+      // 視界内でも良い条件でもう一度検索。
+      [x, y] = this.level.find_random_place(
+        (cell, x, y) => cell.type == 'FLOOR' && !cell.monster
+      )
+    }
+
+    this.hero_change_position(x, y)
   }
 
   // ヒーローに踏まれた罠が発動する。
@@ -3088,14 +3157,14 @@ class Program
       // * 目的地があれば目的地へ向かう。(方向のpreferenceが複雑)
       const dir = Vec.normalize(Vec.minus(m.goal, [mx, my]))
       const i = Program.DIRECTIONS.index(dir)
-      console.log({goal:m.goal, dir, i })
-      ;[i, ...[i - 1, i + 1].shuffle(), ...[i - 2, i + 2].shuffle()].map(j => Program.DIRECTIONS[j.mod(8)]).each( ([dx, dy]) => {
+      console.log({name:m.name, goal:m.goal, dir, i })
+      for (let [dx, dy] of [i, ...[i - 1, i + 1].shuffle(), ...[i - 2, i + 2].shuffle()].map(j => Program.DIRECTIONS[j.mod(8)])) {
         if (this.level.can_move_to_p(m, mx, my, mx+dx, my+dy) &&
            ![mx+dx, my+dy].eql_p( [this.hero.x, this.hero.y] )&&
            this.level.cell(mx+dx, my+dy).item?.name != "結界の巻物") {
           return new Action('move', [dx, dy])
         }
-      })
+      }
 
       // 目的地に行けそうもないのであきらめる。(はやっ!)
       m.goal = null
@@ -3131,13 +3200,13 @@ class Program
           Vec.rotate_clockwise_45(m.facing, -1),
           Vec.rotate_clockwise_45(m.facing,  0),
         ].shuffle()
-        dirs.each( ([dx, dy]) => {
+        for (const [dx, dy] of dirs) {
           if (this.level.can_move_to_p(m, mx, my, mx+dx, my+dy) &&
               ![mx+dx, my+dy].eql_p( [this.hero.x, this.hero.y] ) &&
               this.level.cell(mx+dx, my+dy).item?.name != "結界の巻物") {
             return new Action('move', [dx,dy])
           }
-        })
+        }
 
         // * 進めなければその場で足踏み。反対を向く。
         m.facing = Vec.negate(m.facing)

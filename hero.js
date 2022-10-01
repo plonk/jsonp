@@ -91,7 +91,7 @@ class Hero extends StatusEffectPredicates
     if (item === this.projectile)
       this.projectile = null
     const old_length = this.inventory.length
-    this.inventory = this.inventory.filter(x => x === item)
+    this.inventory = this.inventory.filter(x => x !== item)
     if (this.inventory.length != old_length - 1)
       throw new Error()
   }
@@ -140,7 +140,7 @@ class Hero extends StatusEffectPredicates
     return this.hp >= this.max_hp
   }
 
-  hunger_per_turn()
+  get hunger_per_turn()
   {
     if (this.ring?.name == "ハラヘラズの指輪")
       return 0.0
