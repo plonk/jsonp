@@ -602,11 +602,11 @@ var receiver;
 
 function setup()
 {
-  window.onbeforeunload = function (e) {
-    // 最近のブラウザでは、ここで設定した文字列は表示されない。
-    e.returnValue = "閉じますか？";
-    return "閉じますか？";
-  };
+  // window.onbeforeunload = function (e) {
+  //   // 最近のブラウザでは、ここで設定した文字列は表示されない。
+  //   e.returnValue = "閉じますか？";
+  //   return "閉じますか？";
+  // };
 
   transmitter = new Transmitter({write: function(str){inBuffer.push(str);}});
   var inBuffer = [];
