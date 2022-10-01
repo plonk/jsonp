@@ -1334,7 +1334,8 @@ class Program
   search()
   {
     const [x, y] = [this.hero.x, this.hero.y]
-    [[0,-1], [1,-1], [1,0], [1,1], [0,1], [-1,1], [-1,0], [-1,-1]].each( ( [xoff, yoff] ) => {
+
+    ;[[0,-1], [1,-1], [1,0], [1,1], [0,1], [-1,1], [-1,0], [-1,-1]].each( ( [xoff, yoff] ) => {
       // 敵の下のワナは発見されない。
       if (this.level.in_dungeon_p(x+xoff, y+yoff) &&
           !this.level.cell(x+xoff, y+yoff).monster)
