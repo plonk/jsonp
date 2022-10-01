@@ -7887,27 +7887,27 @@ class Dungeon
   {
     if (level_number >=  1 && level_number <= 2)
       return {
-        WALL            : '􄅦􄅧',
-        HORIZONTAL_WALL : '􄅠􄅡',
-        VERTICAL_WALL   : '􄅢􄅣',
+        WALL            : '\u{104166}\u{104167}',
+        HORIZONTAL_WALL : '\u{104160}\u{104161}',
+        VERTICAL_WALL   : '\u{104162}\u{104163}',
       }
     else if (level_number >=  3 && level_number <= 4)
       return {
-        WALL            : '􄅘􄅙',
-        HORIZONTAL_WALL : '􄅔􄅕',
-        VERTICAL_WALL   : '􄅖􄅗',
+        WALL            : '\u{104158}\u{104159}',
+        HORIZONTAL_WALL : '\u{104154}\u{104155}',
+        VERTICAL_WALL   : '\u{104156}\u{104157}',
       }
     else if (level_number >=  5 && level_number <= 6)
       return {
-        WALL            : '􄅞􄅟',
-        HORIZONTAL_WALL : '􄅚􄅛',
-        VERTICAL_WALL   : '􄅜􄅝',
+        WALL            : '\u{10415e}\u{10415f}',
+        HORIZONTAL_WALL : '\u{10415a}\u{10415b}',
+        VERTICAL_WALL   : '\u{10415c}\u{10415d}',
       }
     else if (level_number >=  7 && level_number <= 9)
       return {
-        WALL            : '􄅰􄅱',
-        HORIZONTAL_WALL : '􄅬􄅭',
-        VERTICAL_WALL   : '􄅮􄅯',
+        WALL            : '\u{104170}\u{104171}',
+        HORIZONTAL_WALL : '\u{10416c}\u{10416d}',
+        VERTICAL_WALL   : '\u{10416e}\u{10416f}',
       }
     else if (level_number >=  10 && level_number <= 12)
       return {
@@ -7917,45 +7917,45 @@ class Dungeon
       }
     else if (level_number >=  13 && level_number <= 15)
       return {
-        HORIZONTAL_WALL : '􄅲􄅳',
-        VERTICAL_WALL   : '􄅴􄅵',
-        WALL            : '􄅶􄅷',
+        HORIZONTAL_WALL : '\u{104172}\u{104173}',
+        VERTICAL_WALL   : '\u{104174}\u{104175}',
+        WALL            : '\u{104176}\u{104177}',
       }
     else if (level_number >=  16 && level_number <= 18)
       return {
-        WALL            : '􄈪􄈫',
-        HORIZONTAL_WALL : '􄈦􄈧',
-        VERTICAL_WALL   : '􄈨􄈩',
+        WALL            : '\u{10422a}\u{10422b}',
+        HORIZONTAL_WALL : '\u{104226}\u{104227}',
+        VERTICAL_WALL   : '\u{104228}\u{104229}',
       }
     else if (level_number >=  19 && level_number <= 21)
       return {
-        WALL            : '􄅌􄅍',
-        HORIZONTAL_WALL : '􄅈􄅉',
-        VERTICAL_WALL   : '􄅊􄅋',
+        WALL            : '\u{10414c}\u{10414d}',
+        HORIZONTAL_WALL : '\u{104148}\u{104149}',
+        VERTICAL_WALL   : '\u{10414a}\u{10414b}',
       }
     else if (level_number >=  25 && level_number <= 26)
       return {
-        WALL            : '􄅒􄅓',
-        HORIZONTAL_WALL : '􄅐􄅑',
-        VERTICAL_WALL   : '􄅎􄅏',
+        WALL            : '\u{104152}\u{104153}',
+        HORIZONTAL_WALL : '\u{104150}\u{104151}',
+        VERTICAL_WALL   : '\u{10414e}\u{10414f}',
       }
     else if (level_number >=  22 && level_number <= 24)
       return {
-        HORIZONTAL_WALL : '􄈠􄈡',
-        VERTICAL_WALL   : '􄈢􄈣',
-        WALL            : '􄈤􄈥',
+        HORIZONTAL_WALL : '\u{104220}\u{104221}',
+        VERTICAL_WALL   : '\u{104222}\u{104223}',
+        WALL            : '\u{104224}\u{104225}',
       }
     else if (level_number >=  27 && level_number <= 99)
       return {
-        HORIZONTAL_WALL : '􄅸􄅹',
-        VERTICAL_WALL   : '􄅺􄅻',
-        WALL            : '􄅼􄅽',
+        HORIZONTAL_WALL : '\u{104178}\u{104179}',
+        VERTICAL_WALL   : '\u{10417a}\u{10417b}',
+        WALL            : '\u{10417c}\u{10417d}',
       }
     else
       return {
-        WALL            : '􄁀􄁁',
-        HORIZONTAL_WALL : '􄀢􄀣',
-        VERTICAL_WALL   : '􄀼􄀽',
+        WALL            : '\u{104040}\u{104041}',
+        HORIZONTAL_WALL : '\u{104022}\u{104023}',
+        VERTICAL_WALL   : '\u{10403c}\u{10403d}',
       }
   }
 

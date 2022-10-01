@@ -57,18 +57,18 @@ class Hero extends StatusEffectPredicates
   get char()
   {
     if (this.hp < 1.0)
-      return '􄅂􄅃'
+      return '\u{104142}\u{104143}'
     else if (this.asleep_p())
-      return '􄅂􄅃'
+      return '\u{104142}\u{104143}'
     else {
       if (this.weapon && this.shield)
-        return '􄀦􄀧'
+        return '\u{104026}\u{104027}'
       else if (this.weapon)
-        return '􄄾􄄿'
+        return '\u{10413e}\u{10413f}'
       else if (this.shield)
-        return  '􄄼􄄽'
+        return  '\u{10413c}\u{10413d}'
       else
-        return '􄅀􄅁'
+        return '\u{104140}\u{104141}'
     }
   }
 

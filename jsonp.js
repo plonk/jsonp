@@ -2407,7 +2407,7 @@ class Program
       } else {
         const tile = this.level.background_char(x, y) 
         if (this.hero.hallucinating_p()) {
-          if (tile == '􄄤􄄥')
+          if (tile == '\u{104124}\u{104125}')
             return u(0x104168) + u(0x104169)
           else
             return tile

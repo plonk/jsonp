@@ -76,20 +76,20 @@ class ResultScreen
       win.setpos(7, 1)
       if (data['weapon'])
         win.addstr(
-          sprintf("%s%s", '􄀬􄀭', data['weapon'])
+          sprintf("%s%s", '\u{10402c}\u{10402d}', data['weapon'])
         )
 
 
       win.setpos(8, 1)
       if (data['shield'])
         win.addstr(
-          sprintf("%s%s", '􄀮􄀯', data['shield'])
+          sprintf("%s%s", '\u{10402e}\u{10402f}', data['shield'])
         )
 
       win.setpos(9, 1)
       if (data['ring'])
         win.addstr(
-          sprintf("%s%s", '􄀸􄀹', data['ring'])
+          sprintf("%s%s", '\u{104038}\u{104039}', data['ring'])
         )
 
       data["screen_shot"].forEach((row, i) => {

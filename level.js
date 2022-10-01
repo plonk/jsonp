@@ -22,9 +22,9 @@ class Cell
     switch ( this.type ) {
     case 'STATUE':
       if (lit)
-        return '􄄤􄄥' // モアイ像
+        return '\u{104124}\u{104125}' // モアイ像
       else if (this.explored)
-        return '􄀾􄀿' // 薄闇
+        return '\u{10403e}\u{10403f}' // 薄闇
       else
         return '  '
       
@@ -48,17 +48,17 @@ class Cell
       
     case 'FLOOR':
       if (lit)
-        return '􄀪􄀫' // 部屋の床
+        return '\u{10402a}\u{10402b}' // 部屋の床
       else if (this.explored)
-        return '􄀾􄀿' // 薄闇
+        return '\u{10403e}\u{10403f}' // 薄闇
       else
         return '  '
       
     case 'PASSAGE':
       if (lit)
-        return '􄀤􄀥' // 通路
+        return '\u{104024}\u{104025}' // 通路
       else if (this.explored)
-        return '􄀾􄀿' // 薄闇
+        return '\u{10403e}\u{10403f}' // 薄闇
       else
         return '  '
       
@@ -147,9 +147,9 @@ class StairCase
   get char()
   {
     if (this.upwards)
-      return '􄄸􄄹'
+      return '\u{104138}\u{104139}'
     else
-      return '􄀨􄀩'
+      return '\u{104028}\u{104029}'
   }
 }
 

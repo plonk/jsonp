@@ -10,7 +10,7 @@ class Gold
 
   get char()
   {
-    return '􄀲􄀳' 
+    return '\u{104032}\u{104033}' 
   }
 
   get name()
@@ -177,15 +177,15 @@ class Item
   ]
 
   static CHARS = {
-    "box" : "􄄺􄄻",
-    "food" : "􄀶􄀷",
-    "herb" : "􄀰􄀱",
-    "projectile" : "􄁌􄁍",
-    "ring" : "􄀸􄀹",
-    "scroll" : "􄀴􄀵",
-    "shield" : "􄀮􄀯",
-    "staff" : "􄀺􄀻",
-    "weapon" : "􄀬􄀭",
+    "box" : "\u{10413a}\u{10413b}",
+    "food" : "\u{104036}\u{104037}",
+    "herb" : "\u{104030}\u{104031}",
+    "projectile" : "\u{10404c}\u{10404d}",
+    "ring" : "\u{104038}\u{104039}",
+    "scroll" : "\u{104034}\u{104035}",
+    "shield" : "\u{10402e}\u{10402f}",
+    "staff" : "\u{10403a}\u{10403b}",
+    "weapon" : "\u{10402c}\u{10402d}",
   }
 
   static make_item(name)
@@ -287,7 +287,7 @@ class Item
   get char()
   {
     if (this.type == 'scroll' && this.stuck)
-      return '􄅄􄅅'
+      return '\u{104144}\u{104145}'
     else {
       const c = Item.CHARS[this.type]
       if (!c)
