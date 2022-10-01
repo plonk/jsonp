@@ -260,9 +260,19 @@ Receiver.prototype.addCharacter = function (c) {
     if (this.insertMode) {
       this.insertBlankCharacters('2');
     }
-    if (this.cursor_x >= this.columns - 1) {
+    if (this.cursor_x === this.columns) {
       if (this.autoWrap) {
         this.advanceCursor();
+      } else {
+        this.cursor_x -= 2;
+      }
+    }
+    if (this.cursor_x === this.columns - 1) {
+      if (this.autoWrap) {
+        this.advanceCursor();
+        this.advanceCursor();
+      } else {
+        this.cursor_x -= 1;
       }
     }
     this.buffer.getCellAtOffset(this.cursorOffset()).attrs = this.graphicAttrs.clone();
