@@ -6,16 +6,17 @@ class Hero extends StatusEffectPredicates
   constructor(opts)
   {
     super()
-    this.x            = opts.x
-    this.y            = opts.y
-    this.hp           = opts.hp
-    this.max_hp       = opts.max_hp
-    this.raw_strength = opts.raw_strength
-    this.gold         = opts.gold
-    this.exp          = opts.exp
-    this.fullness     = opts.fullness
-    this.max_fullness = opts.max_fullness
-    this.lv           = opts.lv
+    this.x                = opts.x
+    this.y                = opts.y
+    this.hp               = opts.hp
+    this.max_hp           = opts.max_hp
+    this.raw_strength     = opts.raw_strength
+    this.raw_max_strength = opts.raw_max_strength
+    this.gold             = opts.gold
+    this.exp              = opts.exp
+    this.fullness         = opts.fullness
+    this.max_fullness     = opts.max_fullness
+    this.lv               = opts.lv
 
     this.inventory = []
     this.status_effects = []

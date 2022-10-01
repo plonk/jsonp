@@ -26,7 +26,7 @@ class StatusEffect
         blindness:"盲目",
         trap_detection:"ワナ感知",
       }
-    )[this.type] || type
+    )[this.type] || this.type
   }
 }
 
@@ -264,9 +264,9 @@ class Monster extends StatusEffectPredicates
   get name()
   {
     if (this._name == "化け狸")
-      this.impersonating_name
+      return this.impersonating_name
     else
-      this._name
+      return this._name
   }
 
   tipsy_p()

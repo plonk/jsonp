@@ -190,7 +190,7 @@ class Item
 
   static make_item(name)
   {
-    const row = this.ITEMS.find(r => r[1] == name)
+    const row = Item.ITEMS.find(r => r[1] == name)
     if (!row)
       throw new Error(`no such item: ${name}`)
 
@@ -268,7 +268,7 @@ class Item
 
   original_number()
   {
-    const row = this.ITEMS.find(r => r[1] == this.name)
+    const row = Item.ITEMS.find(r => r[1] == this.name)
     if (row)
       return row[2]
     else

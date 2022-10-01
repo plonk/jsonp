@@ -52,7 +52,6 @@ class Menu
             this.win.attron(Curses.A_BOLD)
 
           this.win.addstr(" ")
-console.log(this.items[i], this.items[i].to_s())
           this.dispfunc.apply(null, [this.win, this.items[i]])
           if (i == this.index)
             this.win.attroff(Curses.A_BOLD)
@@ -61,29 +60,28 @@ console.log(this.items[i], this.items[i].to_s())
         this.win.setpos(this.index + 1, 1)
         const c = await this.win.getch()
 
-        switch (c)
-        {
-          case 'j':
-          case Curses.KEY_DOWN:
+        switch (c) {
+        case 'j':
+        case Curses.KEY_DOWN:
           this.index = (this.index + 1).mod(this.items.length)
           break
 
-          case 'k':
-          case Curses.KEY_UP:
+        case 'k':
+        case Curses.KEY_UP:
           this.index = (this.index - 1).mod(this.items.length)
           break
 
-          case 's':
+        case 's':
           if (this.sortable)
             return ['sort']
 
           break
 
-          case 'q':
+        case 'q':
           return ['cancel']
           break
 
-          case '\n':
+        case 10:
           return ['chosen', this.items[this.index]]
           break
         }

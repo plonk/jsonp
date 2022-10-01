@@ -26,25 +26,25 @@ class Cell
       else if (this.explored)
         return '􄀾􄀿' // 薄闇
       else
-        return '　'
+        return '  '
       
     case 'WALL':
       if (lit || this.explored)
         return tileset['WALL']
       else
-        return '　'
+        return '  '
       
     case 'HORIZONTAL_WALL':
       if (lit || this.explored)
         return tileset['HORIZONTAL_WALL']
       else
-        return '　'
+        return '  '
       
     case 'VERTICAL_WALL':
       if (lit || this.explored)
         return tileset['VERTICAL_WALL']
       else
-        return '　'
+        return '  '
       
     case 'FLOOR':
       if (lit)
@@ -52,7 +52,7 @@ class Cell
       else if (this.explored)
         return '􄀾􄀿' // 薄闇
       else
-        return '　'
+        return '  '
       
     case 'PASSAGE':
       if (lit)
@@ -60,7 +60,7 @@ class Cell
       else if (this.explored)
         return '􄀾􄀿' // 薄闇
       else
-        return '　'
+        return '  '
       
     default:
       return '？'
@@ -649,7 +649,27 @@ class Level
     this.light_up(rect)
   }
 
-  // ...
+  first_cells_in(room)
+  {
+    const res = []
+    new Range(room.left+1, room.right-1).each(x => {
+      if ( this.cell(x, room.top).type == 'PASSAGE' )
+        res.push( [x, room.top+1] )
+
+      if ( this.cell(x, room.bottom).type == 'PASSAGE' )
+        res.push( [x, room.bottom-1] )
+    })
+
+    new Range(room.top+1, room.bottom-1).each(y => {
+      if ( this.cell(room.left, y).type == 'PASSAGE' )
+        res.push( [room.left+1, y] )
+
+      if ( this.cell(room.right, y).type == 'PASSAGE' )
+        res.push( [room.right-1, y] )
+    })
+
+    return res
+  }
   
 }
 
@@ -670,6 +690,28 @@ Array.prototype.max = function(){
 
 Array.prototype.min = function(){
   return Math.min(... this);
+}
+
+Array.prototype.count = function(){
+  if (arguments.length == 0)
+    return this.length
+  else if (arguments.length == 1 && arguments[0] instanceof Function) {
+    let i = 0
+    this.forEach(elt => {
+      if (arguments[0](elt))
+        i++
+    })
+    return i
+  } else if (arguments.length == 1) {
+    let i = 0
+    this.forEach(elt => {
+      if (eql_p(elt, arguments[0]))
+        i++
+    })
+    return i
+  } else {
+    throw new Error("0 or 1 arguments expected")
+  }
 }
 
 
