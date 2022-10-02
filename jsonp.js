@@ -1159,6 +1159,131 @@ class Program
     }
   }
 
+// ...
+
+  // 装備する。
+  async equip(item)
+  {
+    if (!this.hero.inventory.find(i => i === item))
+      throw new Error( "not in inventory" )
+
+    switch ( item.type ) {
+    case 'weapon':
+      await this.equip_weapon(item)
+      break
+    case 'shield':
+      await this.equip_shield(item)
+      break
+    case 'ring':
+      await this.equip_ring(item)
+      break
+    case 'projectile':
+      await this.equip_projectile(item)
+      break
+    default:
+      throw new Error( "equip" )
+    }
+  }
+
+  // 武器を装備する。
+  async equip_weapon(item)
+  {
+    if (this.hero.weapon?.cursed) {
+      await this.log(this.display_item(this.hero.weapon), "は 呪われていて 外れない！")
+    } else if (this.hero.weapon === item) { // coreferential?
+      this.hero.weapon = null
+      await this.log("武器を 外した。")
+    } else {
+      this.hero.weapon = item
+      if (!item.inspected) {
+        item.inspected = true
+      }
+      await this.log(this.display_item(item), "を 装備した。")
+      await SoundEffects.weapon()
+      if (item.cursed) {
+        await this.log("なんと！ ", this.display_item(item), "は呪われていた！")
+      }
+    }
+  }
+
+  // 盾を装備する。
+  async equip_shield(item)
+  {
+    if (this.hero.shield?.cursed) {
+      await this.log(this.display_item(this.hero.shield), "は 呪われていて 外れない！")
+    } else if (this.hero.shield === item) {
+      this.hero.shield = null
+      await this.log("盾を 外した。")
+    } else {
+      this.hero.shield = item
+      if (!item.inspected) {
+        item.inspected = true
+      }
+      await this.log(this.display_item(item), "を 装備した。")
+      await SoundEffects.weapon()
+      if (item.cursed) {
+        await this.log("なんと！ ", this.display_item(item), "は呪われていた！")
+      }
+    }
+  }
+
+  // 指輪を装備する。
+  async equip_ring(item)
+  {
+    if (this.hero.ring?.cursed) {
+      await this.log(this.display_item(this.hero.ring), "は 呪われていて 外れない！")
+    } else if (this.hero.ring === item) {
+      this.hero.ring = null
+      await this.log(this.display_item(item), "を 外した。")
+    } else {
+      this.hero.ring = item
+      if (!item.inspected) {
+        item.inspected = true
+      }
+      await this.log(this.display_item(item), "を 装備した。")
+      await SoundEffects.weapon()
+      if (item.cursed) {
+        await this.log("なんと！ ", this.display_item(item), "は呪われていた！")
+      }
+    }
+  }
+
+  // 矢を装備する。
+  async equip_projectile(item)
+  {
+    if (this.hero.projectile === item) {
+      this.hero.projectile = null
+      await this.log(this.display_item(item), "を 外した。")
+    } else {
+      this.hero.projectile = item
+      await this.log(this.display_item(item), "を 装備した。")
+      await SoundEffects.weapon()
+    }
+  }
+
+  async increase_max_fullness(amount)
+  {
+    const old = this.hero.max_fullness
+    if (this.hero.max_fullness < 200.0) {
+      this.hero.increase_max_fullness(amount)
+      this.hero.fullness = this.hero.max_fullness
+      await this.log(
+        sprintf("最大満腹度が %.0f%% 増えた。", this.hero.max_fullness - old)
+      )
+    }
+  }
+
+  // 満腹度が回復する。
+  async increase_fullness(amount)
+  {
+    this.hero.increase_fullness(amount)
+    if (this.hero.full_p()) {
+      await this.log("おなかが いっぱいに なった。")
+    } else {
+      await this.log("少し おなかが ふくれた。")
+    }
+  }
+
   // ヒーローがダメージを受ける。
   async take_damage(amount, opts = {})
   {
@@ -2053,6 +2178,38 @@ class Program
       }
     }
     this.initial_menu()
+  }
+
+  // 下の階へ移動。
+  async cheat_go_downstairs()
+  {
+    if (this.level_number < 99) {
+      await this.new_level(+1, false)
+    }
+    return 'nothing'
+  }
+
+  // 上の階へ移動。
+  async cheat_go_upstairs()
+  {
+    if (this.level_number > 1) {
+      await this.new_level(-1, false)
+    }
+    return 'nothing'
+  }
+
+  // 階段を降りる。
+  // () -> :nothing
+  async go_downstairs()
+  {
+    const st = this.level.cell(this.hero.x, this.hero.y).staircase
+    if (st) {
+      await SoundEffects.staircase()
+      await this.new_level(st.upwards ? -1 : +1, true)
+    } else {
+      await this.log("ここに 階段は ない。")
+    }
+    return 'nothing'
   }
 
   // 階段の方向を更新。

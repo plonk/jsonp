@@ -224,7 +224,7 @@ class Monster extends StatusEffectPredicates
     case  "ボンプキン":
       if (this.hp < 1.0)
         return u(0x104238) + u(0x104239) // puff of smoke
-      else if (!this.nullified_p() && this.bomb_p() && this.hp <= this.max_hp.idiv(2))
+      else if (!this.nullified_p() && this.bomb_p() && this.hp <= this.max_hp.div(2))
         return '\u{10406e}\u{10406f}'
       else
         return this._char
@@ -360,7 +360,7 @@ class Monster extends StatusEffectPredicates
 // Array#reject!
 Array.prototype.reject_d = function(pred) {
   for (let i = 0; i < this.length; ) {
-    if (pred(val)) {
+    if (pred(this[i])) {
       this.splice(i, 1)
     } else
       i++

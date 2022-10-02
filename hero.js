@@ -115,7 +115,7 @@ class Hero extends StatusEffectPredicates
     }
   }
 
-  full()
+  full_p()
   {
     return this.fullness > max_fullness - 1.0
   }

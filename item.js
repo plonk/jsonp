@@ -316,7 +316,7 @@ class Item
       if (this.cursed)
         prefix = u(0x10423C)
 
-      return `${this.prefix}${this.name}`
+      return `${prefix}${this.name}`
       break
 
     case  "weapon":
@@ -328,7 +328,7 @@ class Item
       else
         prefix = ""
 
-      return `${this.prefix}${this.name}${ws_num_fmt(this.relative_number())}`
+      return `${prefix}${this.name}${ws_num_fmt(this.relative_number())}`
       break
 
     case  "staff":
