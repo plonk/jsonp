@@ -92,16 +92,7 @@ class Cell
       throw new Error(object.constructor.name)
   }
 
-  put_object(object)
-  {
-    this.objects.push(object)
-    this.objects.sort((a, b) => this.score(a) < this.score(b))
-  }
-
-  remove_object(object)
-  {
-    this.objects.delete(object)
-  }
+  // ...
 
   can_place_p()
   {
@@ -169,6 +160,13 @@ class Rect
     for (let y = this.top; y <= this.bottom; y++)
       for (let x = this.left; x <= this.right; x++)
         block(x, y)
+  }
+
+  async each_coords_async(block)
+  {
+    for (let y = this.top; y <= this.bottom; y++)
+      for (let x = this.left; x <= this.right; x++)
+        await block(x, y)
   }
 
   each(block) { this.each_coords(block) }
@@ -358,7 +356,7 @@ class Level
       throw new Error( `unknown type ${type}` )
     }
 
-    this.stairs_going_up = false
+    this._stairs_going_up = false
     this.whole_level_lit = false
     this.turn = 0
 
@@ -505,6 +503,54 @@ class Level
     return candidates.sample()
   }
 
+  cell(x, y)
+  {
+    return this.dungeon[y][x]
+  }
+
+  put_object(object, x, y)
+  {
+    if (! (Number.isInteger(x) && Number.isInteger(y)) )
+      throw new Error("type error")
+    if (! this.in_dungeon_p(x, y) )
+      throw new Error("range error")
+
+    this.dungeon[y][x].put_object(object)
+  }
+
+  remove_object(object, x, y)
+  {
+    this.dungeon[y][x].remove_object(object)
+  }
+
+  // this is confused ...
+  get stairs_going_up()
+  {
+    return this._stairs_going_up
+  }
+
+  set stairs_going_up(bool)
+  {
+    try {
+      new Range(0, this.height, true).each(y => {
+        new Range(0, this.width, true).each(x => {
+          const st = this.dungeon[y][x].objects.find(obj => obj instanceof StairCase)
+          if (st) {
+            st.upwards = bool
+            this._stairs_going_up = bool
+            throw 'stairs found'
+          }
+        })
+      })
+    } catch (v) {
+      if (v == 'stairs found')
+        return
+      else
+        throw v
+    }
+    throw new Error("no stairs!")
+  }
+
   has_type_at(type, x, y)
   {
     return this.dungeon[y][x].objects.some(x => x instanceof type)
@@ -562,30 +608,6 @@ class Level
     }
   }
 
-  surroundings(x, y)
-  {
-    const top = [0, y-1].max()
-    const bottom = [this.height-1, y+1].min()
-    const left = [0, x-1].max()
-    const right = [this.width-1, x+1].min()
-    return new Rect(top, bottom, left, right)
-  }
-
-  cell(x, y)
-  {
-    return this.dungeon[y][x]
-  }
-
-  put_object(object, x, y)
-  {
-    if (! (Number.isInteger(x) && Number.isInteger(y)) )
-      throw new Error("type error")
-    if (! this.in_dungeon_p(x, y) )
-      throw new Error("range error")
-
-    this.dungeon[y][x].put_object(object)
-  }
-
   in_dungeon_p(x, y)
   {
     return x.between_p(0, this.width-1) && y.between_p(0, this.height-1)
@@ -599,6 +621,15 @@ class Level
       return new Rect(r.top, r.bottom, r.left, r.right)
     else
       return this.surroundings(x, y)
+  }
+
+  surroundings(x, y)
+  {
+    const top = [0, y-1].max()
+    const bottom = [this.height-1, y+1].min()
+    const left = [0, x-1].max()
+    const right = [this.width-1, x+1].min()
+    return new Rect(top, bottom, left, right)
   }
 
   light_up(fov)

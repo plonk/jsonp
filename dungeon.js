@@ -7671,7 +7671,7 @@ class Dungeon
       m = Monster.make_monster(selected_monster)
       switch (m.name) {
       case "どろぼう猫":
-        m.item = make_item(level_number)
+        m.item = this.make_item(level_number)
         break
       case "化け狸":
         let n
@@ -7744,7 +7744,71 @@ class Dungeon
     }
   }
 
+  place_objective(level, level_number)
+  {
+    while (true) {
+      const cell = level.cell(...level.get_random_place('FLOOR'))
+      if (cell.can_place_p()) {
+        const objective = Item.make_item(Dungeon.OBJECTIVE_NAME)
+        objective.number = level_number
+        cell.put_object(objective)
+        return
+      }
+    }
+  }
+
+
   // ...
+
+  // ターン経過でモンスターが湧く時。
+  // rect: 避けるべきヒーローの視界。
+  place_monster(level, level_number, rect)
+  {
+    const list = level.all_cells_and_positions
+    const possibles = list.filter( ([cell, x, y]) => cell.type == 'FLOOR' && !cell.monster )
+
+    if (possibles.size == 0)
+      throw new Error( "nowhere to put monster")
+
+    const preferred = possibles.filter( ([cell, x, y]) => !rect.include_p(x, y) )
+    let cell
+    if (preferred.size == 0) {
+      cell = possibles.sample()[0]
+    } else {
+      cell = preferred.sample()[0]
+    }
+    this.spawn_monster(this.make_monster(level_number), cell, level)
+  }
+
+  spawn_other_three(m, cell, level)
+  {
+    const [x, y] = level.coordinates_of(m)
+    const scorefunc = offsets => {
+      return offsets.count( ([dx, dy]) => {
+        const cell = level.cell(x+dx, y+dy)
+        return (cell.type == 'FLOOR' || cell.type == 'PASSAGE') && !cell.monster
+      })
+    }
+    const offsets = [
+      [[1,0],[0,1],[1,1]],     // 最初が左上
+      [[1,0],[0,-1],[1,-1]],   // 最初が左下
+      [[-1,0],[0,1],[-1,1]],   // 最初が右上
+      [[-1,0],[0,-1],[-1,-1]], // 最初が右上
+    ].sort( (a,b) => scorefunc(a) - scorefunc(b) ).reverse()[0]
+
+    const group = []
+    group.push(m)
+    offsets.each( ([dx, dy]) => {
+      const cell = level.cell(x+dx, y+dy)
+      if ( (cell.type == 'FLOOR' || cell.type == 'PASSAGE') && !cell.monster ) {
+        const friend = Monster.make_monster("四人トリオ")
+        group.push( friend)
+        friend.group = group
+        cell.put_object(friend)
+      }
+    })
+    m.group = group
+  }
 
   spawn_monster(m, cell, level)
   {
@@ -8010,7 +8074,7 @@ class Dungeon
     this.place_monsters(level, level_number)
 
     if (level_number >= 27 && ! this.on_return_trip_p(hero))
-      place_objective(level, level_number)
+      this.place_objective(level, level_number)
 
     if ( level_number == 50 &&
          !this.on_return_trip_p(hero) &&
@@ -8053,7 +8117,7 @@ class Dungeon
   
   on_return_trip_p(hero)
   {
-    hero.inventory.some(item => item.type == 'box' && item.name != "鉄の金庫")
+    return hero.inventory.some(item => item.type == 'box' && item.name != "鉄の金庫")
   }
 }
 

@@ -15,7 +15,7 @@ class Gold
 
   get name()
   {
-    `${this.amount}ゴールド`
+    return `${this.amount}ゴールド`
   }
 
   to_s()
