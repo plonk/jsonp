@@ -100,7 +100,7 @@ class Hero extends StatusEffectPredicates
   add_to_inventory(item)
   {
     if (item.type == "projectile") {
-      stock = this.inventory.find(x => x.name == item.name)
+      const stock = this.inventory.find(x => x.name == item.name)
       if (stock) {
         stock.number = Math.min(stock.number + item.number, 99)
         return true
@@ -165,12 +165,30 @@ class Hero extends StatusEffectPredicates
     return this.ring?.name == "人形よけの指輪"
   }
 
+  // アイテムの種類でソートしてから、同じ名前のアイテムをまとめる。
   sort_inventory()
   {
-    // なにしてるのかわからない。安定ソートのあとなぜグループわけ？
     // self.inventory = inventory.map.with_index.sort { |(a,i), (b,j)|
     //   [a.sort_priority, i] <=> [b.sort_priority, j]
     // }.map(&:first).group_by { |i| i.name }.values.flatten(1)
+
+    // ※モダンなブラウザでは Array.prototype.sort は安定ソートである。
+    let items = this.inventory.sort( (a, b) => a.sort_priority - b.sort_priority )
+
+    // Map はキーの挿入順を覚えているので、同じ名前のアイテム間での順番は変わらない。
+    const groups = new Map
+    for (const item of items) {
+      if (!groups.has(item.name))
+        groups.set(item.name, [])
+
+      groups.get(item.name).push(item)
+    }
+    const result = []
+    for (const [key, value] of groups) {
+      result.push(... value)
+    }
+
+    this.inventory = result
   }
 
   get pos()

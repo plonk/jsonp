@@ -388,7 +388,7 @@ class Item
     this.rustproof || this.gold_plated
   }
 
-  sort_priority()
+  get sort_priority()
   {
     switch (this.type) {
     case "weapon":
@@ -461,7 +461,7 @@ class Item
     }
   }
 
-  get targeted_scroll_p()
+  targeted_scroll_p()
   {
     if (this.type != 'scroll')
       return false

@@ -85,8 +85,21 @@ const Curses = {
   cols: 80,
   lines: 24,
 
-  KEY_DOWN: 'KEY_DOWN',
-  KEY_UP: 'KEY_UP',
+  KEY_BTAB:   '\x1b[Z',
+  KEY_DC:     0x7f, // or \x1b[3~ ?
+  KEY_DOWN:   '\x1b[B',
+  KEY_END:    '\x1b[F',
+  KEY_HOME:   '\x1b[H',
+  KEY_LEFT:   '\x1b[D',
+  KEY_NPAGE:  '\x1b[6~',
+  KEY_PPAGE:  '\x1b[5~',
+  KEY_RIGHT:  '\x1b[C',
+  KEY_SF:     '\x1b[1;2B',
+  KEY_SLEFT:  '\x1b[1;2D',
+  KEY_SR:     '\x1b[1;2A',
+  KEY_SRIGHT: '\x1b[1;2C',
+  KEY_UP:     '\x1b[A',
+
   A_BOLD: 1,
   A_BLINK: 5,
 
@@ -193,15 +206,30 @@ const Curses = {
     async getch()
     {
       const time_limit = this._timeout !== -1 ? +new Date + this._timeout : null
-      const c = await STDIN.readChar(time_limit)
+      let c = await STDIN.readChar(time_limit)
       if (!c)
         return null // タイムアウト
-      const cp = c.codePointAt(c)
-      if (cp <= 0x7f) {
-          if (cp == 0x7e || cp < 0x20)
+
+      if (c == '\x1b') {
+        // これだと F1 ~ F4 が取れない。
+        let buf = c
+        while (!c.match(/[A-Z~]/)) {
+          c = await STDIN.readChar(+new Date + 10) // 10 ms
+          if (!c) {
+            STDIN.ungetch( buf.slice(1) )
+            return 0x1b
+          }
+          buf += c
+        }
+        return buf
+      } else {
+        const cp = c.codePointAt(c)
+        if (cp <= 0x7f) {
+          if (cp == 0x7f || cp < 0x20)
             return cp
+        }
+        return c
       }
-      return c
     }
 
     close()
@@ -244,6 +272,7 @@ const Curses = {
 
   flushinp()
   {
+    STDIN.flushinp()
   },
 
   curs_set(n) // 0 or 1
@@ -503,7 +532,7 @@ const NamingScreen = {
         break
 
       case 'q':
-        return null
+        throw null
 
       case 10:
         if (y == 0) {
@@ -579,6 +608,11 @@ const NamingScreen = {
         if (input_complete)
           return name
       }
+    } catch (v) {
+      if (v === null)
+        return
+      else
+        throw v
     } finally {
       field.close()
       keyboard.close()
@@ -987,7 +1021,7 @@ class Program
             }
           } else {
             await SoundEffects.hit()
-            this.item_hits_monster(item, cell.monster, cell)
+            await this.item_hits_monster(item, cell.monster, cell)
             if (!penetrating)
               return
           }
@@ -1061,6 +1095,303 @@ class Program
     } else {
       this.hero.remove_from_inventory(item)
       this.do_throw_item(item, dir, penetrating, momentum)
+    }
+    return 'action'
+  }
+
+  // 巻物を読む。
+  // Item -> 'nothing' | 'action'
+  async read_scroll(item)
+  {
+    if (item.type != 'scroll')
+      throw new Error( "not a scroll" )
+
+    if ( this.hero.nullified_p() ) {
+      await this.log(this.hero.name, "の 口は封じられていて使えない!")
+      return 'action'
+    }
+
+    if ( item.targeted_scroll_p() ) {
+      return await this.read_targeted_scroll(item)
+    } else {
+      return await this.read_nontargeted_scroll(item)
+    }
+  }
+
+  async read_targeted_scroll(scroll)
+  {
+    const target = await this.choose_target()
+    if (! target )
+      return 'nothing' 
+
+    this.hero.remove_from_inventory(scroll)
+    await this.log(this.display_item(scroll), "を 読んだ。")
+    await SoundEffects.magic()
+
+    if ( this.naming_table.identified_p(scroll.name) ) {
+      this.naming_table.identify(scroll.name)
+      await this.log(`なんと！ ${scroll.name}だった！`)
+    }
+
+    switch ( scroll.name ) {
+    case "同定の巻物":
+      {
+        const prevdesc = this.display_item(target)
+
+        let did_identify
+        if ( this.naming_table.include_p(target.name) && !this.naming_table.identified_p(target.name) ) {
+          this.naming_table.identify(target.name)
+          did_identify = true
+        } else {
+          did_identify = false
+        }
+
+        let did_inspect
+        if ( ['ring', 'weapon', 'shield', 'staff'].include_p(target.type) && !target.inspected ) {
+          target.inspected = true
+          did_inspect = true
+        } else {
+          did_inspect = false
+        }
+
+        if ( did_identify || did_inspect ) {
+          await this.log(prevdesc, "は ", this.display_item(target), "だった。")
+        } else {
+          await this.log("これは ", this.display_item(target), "に 間違いない！")
+        }
+      }
+      break
+
+    case "パンの巻物":
+      {
+        // 装備中のアイテムだったら装備状態を解除する。
+        if ( this.hero.weapon.equal_p(target) ) {
+          this.hero.weapon = null
+        }
+        if ( this.hero.shield.equal_p(target) ) {
+          this.hero.shield = null
+        }
+        if ( this.hero.ring.equal_p(target) ) {
+          this.hero.ring = null
+        }
+
+        const index = this.hero.inventory.index( i => target === i )
+        if ( index ) {
+          this.hero.inventory[index] = Item.make_item("大きなパン")
+          await this.log(this.display_item(target), "は ", this.display_item(this.hero.inventory[index]), "に変わってしまった！")
+        } else { // パンの巻物にパンの巻物を読んだ。
+          await this.log("しかし 何も起こらなかった。")
+        }
+      }
+      break
+
+    case "祈りの巻物":
+      if ( target.type == 'staff' ) {
+        const old = this.display_item(target)
+        const r = rand(new Range(1,5))
+        target.number += r
+        await this.log(old, `の回数が${r}増えた。`)
+      } else {
+        await this.log("しかし 何も起こらなかった。")
+      }
+      break
+
+    default:
+      await this.log("実装してない「どれを」巻物だよ。")
+    }
+    return 'action'
+  }
+
+  // () -> Item
+  async choose_target()
+  {
+    const dispfunc = (win, item) => {
+      const prefix = (this.hero.weapon.equal_p(item) ||
+                      this.hero.shield.equal_p(item) ||
+                      this.hero.ring.equal_p(item)   ||
+                      this.hero.projectile.equal_p(item)) ? "E" : " "
+      this.addstr_ml(win, ["span", prefix, item.char, this.display_item(item)])
+    }
+
+    let menu = null
+
+    try {
+      while (true) {
+        menu = new Menu(this.hero.inventory,
+                        {y: 1, x: 0, cols: 28,
+                         dispfunc: dispfunc,
+                         title: "どれを？",
+                         sortable: false})
+        await this.render()
+        const [command, ...args] = await menu.choose()
+
+        switch ( command ) {
+        case 'cancel':
+          return null
+        case 'chosen':
+          return args[0] // item
+        }
+      }
+    } finally {
+      if (menu)
+        menu.close()
+    }
+  }
+
+  async read_nontargeted_scroll(item)
+  {
+    this.hero.remove_from_inventory(item)
+
+    await this.log(this.display_item(item), "を 読んだ。")
+    await SoundEffects.magic()
+
+    if (! this.naming_table.identified_p(item.name) ) {
+      this.naming_table.identify(item.name)
+      await this.log(`なんと！ ${item.name}だった！`)
+    }
+
+    switch ( item.name ) {
+    case "あかりの巻物":
+      this.level.whole_level_lit = true
+      await this.log("ダンジョンが あかるくなった。")
+    break
+    case "武器強化の巻物":
+      if ( this.hero.weapon ) {
+        this.hero.weapon.number += 1
+        await this.log(`${this.hero.weapon.name}が 少し強くなった。`)
+        if ( this.hero.weapon.cursed ) {
+          this.hero.weapon.cursed = false
+          await this.log("剣の呪いが 解けた。")
+        }
+      } else {
+        await this.log("しかし 何も起こらなかった。")
+      }
+    break
+    case "盾強化の巻物":
+      if ( this.hero.shield ) {
+        this.hero.shield.number += 1
+        await this.log(`${this.hero.shield.name}が 少し強くなった。`)
+        if ( this.hero.shield.cursed ) {
+          this.hero.shield.cursed = false
+          await this.log("盾の呪いが 解けた。")
+        }
+      } else {
+        await this.log("しかし 何も起こらなかった。")
+      }
+    break
+    case "メッキの巻物":
+      if ( this.hero.shield && !this.hero.shield.gold_plated ) {
+        await this.log(`${this.hero.shield}に メッキがほどこされた！ `)
+        this.hero.shield.gold_plated = true
+      } else {
+        await this.log("しかし 盾はすでにメッキされている。")
+      }
+      if ( this.hero.shield?.cursed ) {
+        this.hero.shield.cursed = false
+        await this.log("盾の呪いが 解けた。")
+      }
+    break
+    case "かなしばりの巻物":
+      {
+        const monsters = []
+        const rect = this.level.surroundings(this.hero.x, this.hero.y)
+        rect.each_coords( (x, y) => {
+          if ( this.level.in_dungeon_p(x, y) ) {
+            const m = this.level.cell(x, y).monster
+            if (m)
+              monsters.push( m )
+          }
+        })
+        if (monsters.size > 0 ) {
+          monsters.each(m => {
+            if (!m.paralyzed_p()) {
+              m.status_effects.push(StatusEffect.new('paralysis', 50))
+            }
+          })
+          await this.log("まわりの モンスターの動きが 止まった。")
+        } else {
+          await this.log("しかし 何も起こらなかった。")
+        }
+      }
+      break
+    case "結界の巻物":
+      await this.log("何も起こらなかった。足元に置いて使うようだ。")
+    break
+    case "やりなおしの巻物":
+      if ( this.dungeon.on_return_trip_p(this.hero) ) {
+        await this.log("帰り道では 使えない。")
+      } else if ( this.level_number <= 1 ) {
+        await this.log("しかし何も起こらなかった。")
+      } else {
+        await this.log("不思議なちからで 1階 に引き戻された！ ")
+        this.new_level(1 - this.level_number, false)
+      }
+    break
+    case "爆発の巻物":
+      await this.log("空中で 爆発が 起こった！ ")
+      this.attack_monsters_in_room(new Range(5,35))
+      break
+    case "ワナの巻物":
+      await this.log("実装してないよ。")
+      break
+    case "ワナけしの巻物":
+      this.level.all_cells_and_positions.each( ([cell, x, y]) => {
+        if ( cell.trap ) {
+          cell.remove_object(cell.trap)
+        }
+      })
+      await this.log("このフロアから ワナが消えた。")
+      break
+    case "大部屋の巻物":
+      this.level.all_cells_and_positions.each( ([cell, x, y]) => {
+        if ( x == 0 || x == 79 ) {
+          cell.type = 'VERTICAL_WALL'
+        } else if  ( y == 0 || y == 23 ) {
+          cell.type = 'HORIZONTAL_WALL'
+        } else {
+          cell.type = 'FLOOR'
+        }
+      })
+      this.level.rooms.replace([new Room(0, 23, 0, 79)])
+      this.level.update_lighting(this.hero.x, this.hero.y)
+      await this.log("ダンジョンの壁がくずれた！ ")
+      break
+    case "解呪の巻物":
+      {
+        const cursed_items = this.hero.inventory.filter( i => i.cursed )
+        if ( cursed_items.size > 0 ) {
+          cursed_items.each(item => item.cursed = false)
+          await this.log("アイテムの呪いが 解けた。")
+        } else {
+          await this.log("しかし呪われたアイテムは なかった。")
+        }
+      }
+      break
+    case "兎耳の巻物":
+      if ( this.hero.audition_enhanced_p() ) {
+        await this.log("しかし 何も起こらなかった。")
+      } else {
+        this.hero.status_effects.push(new StatusEffect('audition_enhancement'))
+        await this.log("モンスターの気配を 察知できるようになった。")
+      }
+      break
+    case "豚鼻の巻物":
+      if ( this.hero.olfaction_enhanced_p() ) {
+        await this.log("しかし 何も起こらなかった。")
+      } else {
+        this.hero.status_effects.push( new StatusEffect('olfaction_enhancement') )
+        await this.log("アイテムを 嗅ぎ付けられるようになった。")
+      }
+      break
+    case "封印の巻物":
+      if ( this.hero.nullified_p() ) {
+        await this.log("しかし 何も起こらなかった。")
+      } else {
+        this.hero.status_effects.push(new StatusEffect('nullification'))
+      }
+      break
+    default:
+      await this.log("実装してないよ。")
     }
     return 'action'
   }
@@ -2191,7 +2522,203 @@ class Program
     await this.log(this.display_item(item), "は消えてしまった。")
   }
 
-// ...
+  async use_health_item(character, amount, amount_maxhp)
+  {
+    await SoundEffects.heal()
+    if (character.hp_maxed_p())
+      this.increase_max_hp(character, amount_maxhp)
+    else
+      this.increase_hp(character, amount)
+  }
+
+  // 草がモンスターに当たった時の効果。
+  async herb_hits_monster(item, monster, cell)
+  {
+    this.on_monster_attacked(monster)
+
+    switch ( item.name ) {
+    case "薬草":
+      if (monster.undead_p()) {
+        await this.monster_take_damage(monster, 25, cell)
+      } else {
+        await this.use_health_item(monster, 25, 2)
+      }
+      break
+    case "高級薬草":
+      if (monster.undead_p()) {
+        await this.monster_take_damage(monster, 100, cell)
+      } else {
+        await this.use_health_item(monster, 100, 4)
+      }
+      break
+    case "毒けし草":
+      if (monster.poisonous_p()) {
+        await this.monster_take_damage(monster, 50, cell)
+      } else {
+        await this.log("しかし 何も 起こらなかった。")
+      }
+      break
+    case "ちからの種":
+      monster.strength += 1
+      await this.log(`${this.display_character(monster)}の ちからが 1 上がった。`)
+      break
+    case "幸せの種":
+      // モンスターのレベルというパラメータがないので実装できない。
+      await this.log("しかし 何も 起こらなかった。")
+      break
+    case "すばやさの種":
+      switch (  monster.action_point_recovery_rate) {
+      case 1:
+        monster.action_point_recovery_rate = 2
+        monster.action_point = 2
+        await this.log(`${this.display_character(monster)}の 足はもう遅くない。`)
+        break
+      case 2:
+        monster.action_point_recovery_rate = 4
+        monster.action_point = 4
+        await this.log(`${this.display_character(monster)}の 足が速くなった。`)
+        break
+      case 4:
+        await this.log("しかし 何も起こらなかった。")
+        break
+      default:
+        throw new Error
+      }
+      break
+    case "毒草":
+      if (monster.strength > 0) {
+        monster.strength -= 1
+        await this.log(`${this.display_character(monster)}の ちからが 1 下がった。`)
+      } else {
+        // await this.log("しかし 何も起こらなかった。")
+      }
+
+      switch ( monster.action_point_recovery_rate) {
+      case 1:
+        // await this.log("しかし 何も起こらなかった。")
+        break
+      case 2:
+        monster.action_point_recovery_rate = 1
+        monster.action_point = 1
+        await this.log(`${this.display_character(monster)}の 足が遅くなった。`)
+        break
+      case 4:
+        monster.action_point_recovery_rate = 2
+        monster.action_point = 2
+        await this.log(`${this.display_character(monster)}の 足はもう速くない。`)
+        break
+      default:
+        throw new Error
+      }
+      break
+    case "目つぶし草":
+      if (! monster.blind_p()) {
+        await this.log(`${this.display_character(monster)}は 目が見えなくなった。`)
+        monster.status_effects.push(new StatusEffect('blindness', 50))
+      }
+      break
+    case "まどわし草":
+      if (! monster.hallucinating_p()) {
+        await this.log(`${this.display_character(monster)}は おびえだした。`)
+        monster.status_effects.push(new StatusEffect('hallucination', 50))
+      }
+      break
+    case "混乱草":
+      if (! monster.confused_p()) {
+        await this.log(`${this.display_character(monster)}は 混乱した。`)
+        monster.status_effects.push(new StatusEffect('confused', 10))
+      }
+      break
+    case "睡眠草":
+      await this.monster_fall_asleep(monster)
+      break
+    case "ワープ草":
+      await this.monster_teleport(monster, cell)
+      break
+    case "火炎草":
+      await this.monster_take_damage(monster, rand(new Range(30, 40, true) /* 30...40 */), cell)
+      break
+    default:
+      await this.log("しかし 何も 起こらなかった。")
+    }
+  }
+
+  // 杖がモンスターに当たった時の効果。
+  async staff_hits_monster(item, monster, cell)
+  {
+    let [mx, my] = [null, null]
+    // 書きなおしたい。
+    this.level.all_monsters_with_position.each( ([m, x, y]) => {
+      if (m === monster)
+        [mx, my] = [x, y]
+    })
+
+    if (mx === null)
+      throw new Error("staff_hits_monster: monster not found")
+
+    await this.magic_bullet_hits_monster(item, monster, cell, mx, my)
+  }
+
+  // 盾がモンスターに当たる。
+  async shield_hits_monster(item, monster, cell)
+  {
+    this.on_monster_attacked(monster)
+    const damage = item.number
+    await this.monster_take_damage(monster, damage, cell)
+  }
+
+  // 武器がモンスターに当たる。
+  async weapon_hits_monster(item, monster, cell)
+  {
+    this.on_monster_attacked(monster)
+    const damage = item.number
+    await this.monster_take_damage(monster, damage, cell)
+  }
+
+  // 魔法弾がモンスターに当たる。
+  async projectile_hits_monster(item, monster, cell)
+  {
+    this.on_monster_attacked(monster)
+    const attack = this.get_hero_projectile_attack(item.projectile_strength)
+    const damage = ( (attack * Math.pow(15.0/16.0, monster.defense)) * (112 + rand(32))/128.0 ).to_i()
+    await this.monster_take_damage(monster, damage, cell)
+  }
+
+  // アイテムがモンスターに当たる。
+  async item_hits_monster(item, monster, cell)
+  {
+    await this.log(this.display_item(item), "は ", monster.name, "に当たった。")
+    switch (item.type) {
+    case 'box':
+    case 'food':
+    case 'scroll':
+    case 'ring':
+      this.on_monster_attacked(monster)
+      const damage = 1 + rand(1)
+      await this.monster_take_damage(monster, damage, cell)
+      break
+    case 'herb':
+      await this.herb_hits_monster(item, monster, cell)
+      break
+    case 'staff':
+      await this.staff_hits_monster(item, monster, cell)
+      break
+    case 'shield':
+      await this.shield_hits_monster(item, monster, cell)
+      break
+    case 'weapon':
+      await this.weapon_hits_monster(item, monster, cell)
+      break
+    case 'projectile':
+      await this.projectile_hits_monster(item, monster, cell)
+      break
+    default:
+      throw new Error("case not covered")
+    }
+  }
+
+  // ...
+
   async hero_walk(x1, y1, picking)
   {
     if (this.level.cell(x1, y1).item?.mimic) {
@@ -2388,7 +2915,7 @@ class Program
         throw new Error(item)
       }
     }
-    this.initial_menu()
+    await this.initial_menu()
   }
 
   // 下の階へ移動。
@@ -3839,6 +4366,21 @@ class Program
     }
   }
 
+  async key_test()
+  {
+    const w = Curses.stdscr
+    let c = null
+      w.clear()
+      w.setpos(0,0)
+      w.addstr("key wo ositene")
+      w.setpos(1,0)
+    while (true) {
+      w.addstr(JSON.stringify(c))
+      w.addstr(" ")
+      c = await w.getch()
+    }
+  }
+
   async main()
   {
     for (const fn of ["font.txt", "font-2.txt", "font-3.txt"]) {
@@ -3849,7 +4391,11 @@ class Program
     }
     STDOUT.writeChar(String.fromCodePoint(0x104026) + String.fromCodePoint(0x104027))
 
+    // await this.key_test()
     await this.initial_menu()
+    Curses.stdscr.clear()
+    Curses.stdscr.setpos(0,0)
+    Curses.stdscr.addstr("おつ")
     return
 
     const tune = Sound.compile([
@@ -4024,6 +4570,14 @@ window.addEventListener('load', async () => {
       }
     }
 
+    ungetch(str) {
+      kbdBuffer = str + kbdBuffer
+    }
+
+    flushinp() {
+      kbdBuffer = ""
+    }
+
     peekChar() {
       if (!this.isCharReady())
         throw new Error("peekChar: char not ready");
@@ -4162,4 +4716,10 @@ String.prototype.chomp = function()
     str = str.slice(0, str.length - 1)
   }
   return str
+}
+
+Array.prototype.replace = function(arr)
+{
+  this.splice(0, this.length, ... arr)
+  return this
 }
