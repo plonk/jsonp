@@ -945,6 +945,126 @@ class Program
     }
   }
 
+  // ヒーローがアイテムを投げる。
+  // (Item, Array)
+  async do_throw_item(item, dir, penetrating, momentum)
+  {
+    const [dx, dy] = dir
+    let [x, y] = [this.hero.x, this.hero.y]
+
+    while (true) {
+      if (momentum == 0) {
+        this.item_land(item, x, y)
+        break
+      }
+      if (!this.level.in_dungeon_p(x+dx, y+dy) ) {
+        await this.log(this.display_item(item), "は どこかに消えてしまった…。")
+        break
+      }
+
+      const cell = this.level.cell(x+dx, y+dy)
+      switch (cell.type) {
+      case 'WALL':
+      case 'HORIZONTAL_WALL':
+      case 'VERTICAL_WALL':
+      case 'STATUE':
+        if (! penetrating ) {
+          this.item_land(item, x, y)
+          return
+        }
+        break
+
+      case 'FLOOR':
+      case 'PASSAGE':
+        if ( cell.monster ) {
+          if (rand() < 0.125 ) {
+            await SoundEffects.miss()
+            if ( penetrating ) {
+              await this.log(this.display_item(item), "は外れた。")
+            } else {
+              this.item_land(item, x+dx, y+dy)
+              break
+            }
+          } else {
+            await SoundEffects.hit()
+            this.item_hits_monster(item, cell.monster, cell)
+            if (!penetrating)
+              return
+          }
+        }
+        break
+
+      default:
+        throw new Error( "case not covered" )
+      }
+      [x, y] = [x+dx, y+dy]
+      momentum -= 1
+    }
+  }
+
+  // 方向を入力させて、その方向のベクトルを返す。
+  async ask_direction()
+  {
+    const text =[
+      "y k u",
+      "h   l",
+      "b j n",
+    ]
+    const win = new Curses.Window(5, 7, 5, 33) // lines, cols, y, x
+    try {
+      win.keypad(true)
+      win.clear()
+      win.rounded_box()
+      win.setpos(0, 1)
+      win.addstr("方向")
+      text.forEach(
+        (line, i) => {
+          const y = i + 1
+          win.setpos(y, 1)
+          win.addstr(line.chomp())
+        }
+      )
+      win.setpos(2, 3)
+      while (true) {
+        const c = await win.getch()
+        if (Program.KEY_TO_DIRVEC[c])
+          return Program.KEY_TO_DIRVEC[c]
+        else if (c == 'q') // キャンセル
+          return null
+      }
+    } finally {
+      win.close()
+    }
+  }
+
+  // アイテムを投げるコマンド。
+  // Item -> 'action' | 'nothing'
+  async throw_item(item)
+  {
+    if ( (this.hero.weapon === item || this.hero.shield === item || this.hero.ring === item) &&
+         item.cursed ) {
+      await this.log(this.display_item(item), "は 呪われていて 外れない！")
+      return 'action'
+    }
+
+    const dir = await this.ask_direction()
+    if (!dir)
+      return 'nothing'
+
+    const penetrating = (item.name == "銀の矢")
+    const momentum = (item.name == "銀の矢") ? Float.INFINITY : 10
+    if (item.type == 'projectile' && item.number > 1) {
+      const one = Item.make_item(item.name)
+      one.number = 1
+      item.number -= 1
+      this.do_throw_item(one, dir, penetrating, momentum)
+    } else {
+      this.hero.remove_from_inventory(item)
+      this.do_throw_item(item, dir, penetrating, momentum)
+    }
+    return 'action'
+  }
+
   on_monster_attacked(monster)
   {
     this.wake_monster(monster)
@@ -978,139 +1098,166 @@ class Program
       monster.state = 'awake'
   }
 
-  // # モンスターが特技を使用する。
-  // def monster_trick(m)
-  //   case m.name
-  //   when '催眠術師'
-  //     log("#{m.name}は 手に持っている物を 揺り動かした。")
-  //     SoundEffects.magic
-  //     hero_fall_asleep
-  //   when 'ファンガス'
-  //     log("#{m.name}は 毒のこなを 撒き散らした。")
-  //     take_damage_strength(1)
-  //   when 'ノーム'
-  //     potential = rand(250..1500)
-  //     actual = [potential, @hero.gold].min
-  //     if actual == 0
-  //       log("#{@hero.name}は お金を持っていない！ ")
-  //     else
-  //       log("#{m.name}は #{actual}ゴールドを盗んでワープした！ ")
+  // モンスターが特技を使用する。
+  async monster_trick(m)
+  {
+    switch ( m.name ) {
+    case '催眠術師':
+      await this.log(`${m.name}は 手に持っている物を 揺り動かした。`)
+      await SoundEffects.magic()
+      await this.hero_fall_asleep()
+      break
 
-  //       @hero.gold -= actual
-  //       m.item = Gold.new(actual)
+    case 'ファンガス':
+      await this.log(`${m.name}は 毒のこなを 撒き散らした。`)
+      await this.take_damage_strength(1)
+      break
 
-  //       unless m.hallucinating?
-  //         m.status_effects << StatusEffect.new(:hallucination, Float::INFINITY)
-  //       end
+    case 'ノーム':
+      {
+        const potential = rand(new Range(250, 1500))
+        const actual = [potential, this.hero.gold].min()
+        if (actual == 0) {
+          await this.log(`${this.hero.name}は お金を持っていない！ `)
+        } else {
+          await this.log(`${m.name}は ${actual}ゴールドを盗んでワープした！ `)
 
-  //       monster_teleport(m, @level.cell(*@level.coordinates_of(m)))
-  //     end
-  //   when "白い手"
-  //     if !@hero.held?
-  //       log("#{m.name}は #{@hero.name}の足をつかんだ！ ")
-  //       effect = StatusEffect.new(:held, 10)
-  //       effect.caster = m
-  //       @hero.status_effects << effect
-  //     end
+          this.hero.gold -= actual
+          m.item = new Gold(actual)
 
-  //   when "ピューシャン"
-  //     mx, my = @level.coordinates_of(m)
-  //     dir = Vec.normalize(Vec.minus([@hero.x, @hero.y], [mx, my]))
-  //     arrow = Item.make_item("木の矢")
-  //     arrow.number = 1
-  //     monster_throw_item(m, arrow, mx, my, dir)
+          if (! m.hallucinating_p()) {
+            m.status_effects.push( new StatusEffect('hallucination', Float.INFINITY) )
+          }
 
-  //   when "アクアター"
-  //     log("#{m.name}は 酸を浴せた。")
-  //     if @hero.shield
-  //       take_damage_shield
-  //     end
+          await this.monster_teleport(m, this.level.cell(... this.level.coordinates_of(m)))
+        }
+      }
+      break
 
-  //   when "パペット"
-  //     log("#{m.name}は おどりをおどった。")
-  //     if @hero.puppet_resistent?
-  //       log("しかし #{@hero.name}は平気だった。")
-  //     else
-  //       hero_levels_down
-  //     end
+    case '白い手':
+      if (!this.hero.held_p()) {
+        await this.log(`${m.name}は ${this.hero.name}の足をつかんだ！ `)
+        const effect = new StatusEffect('held', 10)
+        effect.caster = m
+        this.hero.status_effects.push( effect )
+      }
+      break
 
-  //   when "土偶"
-  //     if rand() < 0.5
-  //       log("#{m.name}が #{@hero.name}のちからを吸い取る！")
-  //       if @hero.puppet_resistent?
-  //         log("しかし #{@hero.name}は平気だった。")
-  //       else
-  //         take_damage_max_strength(1)
-  //       end
-  //     else
-  //       log("#{m.name}が #{@hero.name}の生命力を吸い取る！")
-  //       if @hero.puppet_resistent?
-  //         log("しかし #{@hero.name}は平気だった。")
-  //       else
-  //         take_damage_max_hp(5)
-  //       end
-  //     end
+    case 'ピューシャン':
+      {
+        const [mx, my] = this.level.coordinates_of(m)
+        const dir = Vec.normalize(Vec.minus([this.hero.x, this.hero.y], [mx, my]))
+        const arrow = Item.make_item('木の矢')
+        arrow.number = 1
+        await this.monster_throw_item(m, arrow, mx, my, dir)
+      }
+      break
 
-  //   when "目玉"
-  //     log("目玉は#{@hero.name}を睨んだ！")
-  //     unless @hero.confused?
-  //       @hero.status_effects.push(StatusEffect.new(:confused, 10))
-  //       log("#{@hero.name}は 混乱した。")
-  //     end
+    case 'アクアター':
+      await this.log(`${m.name}は 酸を浴せた。`)
+      if (this.hero.shield) {
+        await this.take_damage_shield()
+      }
 
-  //   when "どろぼう猫"
-  //     candidates = @hero.inventory.reject { |x| @hero.equipped?(x) }
+      break
+    case 'パペット':
+      await this.log(`${m.name}は おどりをおどった。`)
+      if (this.hero.puppet_resistent_p())
+        await this.log(`しかし ${this.hero.name}は平気だった。`)
+      else
+        await this.hero_levels_down()
 
-  //     if candidates.any?
-  //       item = candidates.sample
-  //       @hero.remove_from_inventory(item)
-  //       m.item = item
-  //       log("#{m.name}は ", display_item(item), "を盗んでワープした。")
+      break
 
-  //       unless m.hallucinating?
-  //         m.status_effects << StatusEffect.new(:hallucination, Float::INFINITY)
-  //       end
+    case '土偶':
+      if (rand() < 0.5) {
+        await this.log(`${m.name}が ${this.hero.name}のちからを吸い取る！`)
+        if (this.hero.puppet_resistent_p())
+          await this.log(`しかし ${this.hero.name}は平気だった。`)
+        else
+          await this.take_damage_max_strength(1)
+      } else {
+        await this.log(`${m.name}が ${this.hero.name}の生命力を吸い取る！`)
+        if (this.hero.puppet_resistent_p())
+          await this.log(`しかし ${this.hero.name}は平気だった。`)
+        else
+          await this.take_damage_max_hp(5)
+      }
 
-  //       monster_teleport(m, @level.cell(*@level.coordinates_of(m)))
-  //     else
-  //       log("#{@hero.name}は 何も持っていない。")
-  //     end
+      break
+    case '目玉':
+      await this.log(`目玉は${this.hero.name}を睨んだ！`)
+      if (! this.hero.confused_p() ) {
+        this.hero.status_effects.push(new StatusEffect('confused', 10))
+        await this.log(`${this.hero.name}は 混乱した。`)
+      }
 
-  //   when "竜"
-  //     mx, my = @level.coordinates_of(m)
-  //     dir = Vec.normalize(Vec.minus([@hero.x, @hero.y], [mx, my]))
-  //     log("#{m.name}は 火を吐いた。")
-  //     breath_of_fire(m, mx, my, dir)
+      break
 
-  //   when "ソーサラー"
-  //     log("#{m.name}は ワープの杖を振った。")
-  //     SoundEffects.magic
-  //     wait_delay
-  //     hero_teleport
+    case 'どろぼう猫':
+      {
+        const candidates = this.hero.inventory.reject(x => this.hero.equipped_p(x) )
 
-  //   else
-  //     fail
-  //   end
-  // end
+        if (candidates.size > 0) {
+          const item = candidates.sample()
+          this.hero.remove_from_inventory(item)
+          m.item = item
+          await this.log(`${m.name}は `, this.display_item(item), `を盗んでワープした。`)
 
-  // # ヒーローがちからの最大値にダメージを受ける。
-  // def take_damage_max_strength(amount)
-  //   fail unless amount == 1
-  //   if @hero.raw_max_strength <= 1
-  //     log("#{@hero.name}の ちからは これ以上さがらない。")
-  //   else
-  //     @hero.raw_max_strength -= 1
-  //     @hero.raw_strength = [@hero.raw_strength, @hero.raw_max_strength].min
-  //     log("#{@hero.name}の ちからの最大値が 下がった。")
-  //   end
-  // end
+          if (! m.hallucinating_p() ) {
+            m.status_effects.push( new StatusEffect('hallucination', Float.INFINITY) )
+          }
 
-  // # ヒーローが最大HPにダメージを受ける。
-  // def take_damage_max_hp(amount)
-  //   @hero.max_hp = [@hero.max_hp - amount, 1].max
-  //   @hero.hp = [@hero.hp, @hero.max_hp].min
-  //   log("#{@hero.name}の 最大HPが 減った。")
-  // end
+          this.monster_teleport(m, this.level.cell(... this.level.coordinates_of(m)))
+        } else {
+          await this.log(`${this.hero.name}は 何も持っていない。`)
+        }
+      }
+      break
+
+    case '竜':
+      {
+        const [mx, my] = this.level.coordinates_of(m)
+        const dir = Vec.normalize(Vec.minus([this.hero.x, this.hero.y], [mx, my]))
+        await this.log(`${m.name}は 火を吐いた。`)
+        await this.breath_of_fire(m, mx, my, dir)
+      }
+
+      break
+    case 'ソーサラー':
+      await this.log(`${m.name}は ワープの杖を振った。`)
+      await SoundEffects.magic()
+      await this.wait_delay()
+      await this.hero_teleport()
+      break
+
+    default:
+      throw new Error
+    }
+  }
+
+  // ヒーローがちからの最大値にダメージを受ける。
+  async take_damage_max_strength(amount)
+  {
+    if (amount != 1)
+      throw new Error
+
+    if (this.hero.raw_max_strength <= 1) {
+      await this.log(`${this.hero.name}の ちからは これ以上さがらない。`)
+    } else {
+      this.hero.raw_max_strength -= 1
+      this.hero.raw_strength = [this.hero.raw_strength, this.hero.raw_max_strength].min()
+      await this.log(`${this.hero.name}の ちからの最大値が 下がった。`)
+    }
+  }
+
+  // ヒーローが最大HPにダメージを受ける。
+  async take_damage_max_hp(amount)
+  {
+    this.hero.max_hp = [this.hero.max_hp - amount, 1].max()
+    this.hero.hp = [this.hero.hp, this.hero.max_hp].min()
+    await this.log(`${this.hero.name}の 最大HPが 減った。`)
+  }
 
   // モンスターが移動する。
   monster_move(m, mx, my, dir)
@@ -1446,15 +1593,6 @@ class Program
     }
   }
 
-  // (x,y) の罠を見つける。
-  reveal_trap(x, y)
-  {
-    const cell = this.level.cell(x, y)
-    const trap = cell.trap
-    if (trap && !trap.visible)
-      trap.visible = true
-  }
-
   // 周り8マスをワナチェックする
   search()
   {
@@ -1609,7 +1747,7 @@ class Program
 
     case 't':
       if (this.hero.projectile()) {
-        return this.throw_item(this.hero.projectile)
+        return await this.throw_item(this.hero.projectile)
       } else {
         await this.log("投げ物を装備していない。")
         return 'nothing'
@@ -1969,6 +2107,46 @@ class Program
 
 // ...
 
+  // アイテム落下則
+  // 20 18 16 17 19
+  // 13  6  4  5 12
+  // 11  3  1  2 10
+  // 15  9  7  8 14
+  // 25 23 21 22 24
+
+  static LAND_POSITIONS = [
+    [0,0], [1,0], [-1,0],
+    [0,-1], [1,-1], [-1,-1],
+    [0,1], [1,1], [-1,1],
+    [2,0], [-2,0],
+    [2,-1], [-2,-1],
+    [2,1], [-2,1],
+    [0,-2], [1,-2], [-1,-2], [2,-2], [-2,-2],
+    [0,2], [1,2], [-1,2], [2,2], [-2,2]
+  ]
+
+  // 以下の位置(10~25)に落ちるためには、
+  // 別の位置(2~9のいずれか)が床でなければならない。
+  static LAND_DEPENDENT_POSITION = {
+    // "2,0" : [1,0], etc ...
+    [[2,0]]   : [1,0],
+    [[-2,0]]  : [-1,0],
+    [[2,-1]]  : [1,-1],
+    [[-2,-1]] : [-1,-1],
+    [[2,1]]   : [1,1],
+    [[-2,1]]  : [-1,1],
+    [[0,-2]]  : [0,-1],
+    [[1,-2]]  : [1,-1],
+    [[-1,-2]] : [-1,-1],
+    [[2,-2]]  : [1,-1],
+    [[-2,-2]] : [-1,-1],
+    [[0,2]]   : [0,1],
+    [[1,2]]   : [1,1],
+    [[-1,2]]  : [-1,1],
+    [[2,2]]   : [1,1],
+    [[-2,2]]  : [-1,1]
+  }
+
   async describe_item(item)
   {
     let desc
@@ -1978,6 +2156,39 @@ class Program
       desc = item.desc
 
     await this.message_window(desc, { y: 1, x: 27 })
+  }
+
+  // 投げられたアイテムが着地する。
+  async item_land(item, x, y)
+  {
+    const cell = this.level.cell(x, y)
+
+    if ( cell.trap && !cell.trap.visible )
+      cell.trap.visible = true
+
+    for (const [dx, dy] of Program.LAND_POSITIONS) {
+      if (Program.LAND_DEPENDENT_POSITION[[dx,dy]]) {
+        const [dx2, dy2] = Program.LAND_DEPENDENT_POSITION[[dx,dy]]
+        if (! (this.level.in_dungeon_p(x+dx2, y+dy2) &&
+               (this.level.cell(x+dx2, y+dy2).type == 'FLOOR' ||
+                this.level.cell(x+dx2, y+dy2).type == 'PASSAGE'))
+           ) {
+          continue
+        }
+      }
+
+      if (this.level.in_dungeon_p(x+dx, y+dy) &&
+          this.level.cell(x+dx, y+dy).can_place_p()) {
+
+        this.level.cell(x+dx, y+dy).put_object(item)
+        if (item.name == "結界の巻物" )
+          item.stuck = true
+
+        await this.log(this.display_item(item), "は 床に落ちた。")
+        return
+      }
+    }
+    await this.log(this.display_item(item), "は消えてしまった。")
   }
 
 // ...
@@ -2042,7 +2253,7 @@ class Program
       if (rand() < 1.0/16) {
         await this.log(this.hero.name, "は ワープした！")
         this.stop_dashing() // 駄目押し
-        this.hero_teleport()
+        await this.hero_teleport()
       }
     }
   }
@@ -2294,6 +2505,195 @@ class Program
     }
   }
 
+  // 盾が錆びる。
+  async take_damage_shield()
+  {
+    if (this.hero.shield) {
+      if (this.hero.shield.rustproof_p()) {
+        await this.log(`しかし ${this.hero.shield}は錆びなかった。`)
+      } else {
+        if (this.hero.shield.number > 0) {
+          this.hero.shield.number -= 1
+          await this.log("盾が錆びてしまった！ ")
+        } else {
+          await this.log("しかし 何も起こらなかった。")
+        }
+      }
+    } else {
+      await this.log("しかし なんともなかった。")
+    }
+  }
+
+  // アイテムをばらまく。
+  async strew_items()
+  {
+    if ( this.hero.inventory.some( x => x.name == "転ばぬ先の杖" ) ) {
+      await this.log(`しかし ${this.hero.name}は 転ばなかった。`)
+      return
+    }
+
+    let count = 0
+    let candidates = this.hero.inventory.reject( x => this.hero.equipped_p(x) )
+    candidates = candidates.shuffle()
+    for (const [dx, dy] of [[0,-1], [1,-1], [1,0], [1,1], [0,1], [-1,1], [-1,0], [-1,-1]]) {
+      if (candidates.size == 0)
+        break
+
+      const [x, y] = [this.hero.x + dx, this.hero.y + dy]
+
+      if (this.level.in_dungeon_p(x, y) &&
+          this.level.cell(x, y).can_place_p()) {
+        const item = candidates.shift()
+        if (item.name == "結界の巻物") {
+          item.stuck = true
+        }
+        this.level.put_object(item, x, y)
+        this.hero.remove_from_inventory(item)
+        count += 1
+      }
+    }
+
+    if (count > 0)
+      await this.log(`アイテムを ${count}個 ばらまいてしまった！ `)
+  }
+
+  // ヒーローがワープする。
+  async hero_teleport()
+  {
+    await SoundEffects.teleport()
+
+    const fov = this.level.fov(this.hero.x, this.hero.y)
+    let [x, y] = this.level.find_random_place(
+      (cell, x, y) => cell.type == 'FLOOR' && !cell.monster && !fov.include_p(x, y)
+    ) || [null, null]
+
+    if (x === null) {
+      // 視界内でも良い条件でもう一度検索。
+      [x, y] = this.level.find_random_place(
+        (cell, x, y) => cell.type == 'FLOOR' && !cell.monster
+      )
+    }
+
+    this.hero_change_position(x, y)
+  }
+
+  // ヒーローに踏まれた罠が発動する。
+  async trap_activate(trap)
+  {
+    switch ( trap.name ) {
+    case "ワープゾーン":
+      await this.log("ワープゾーンだ！ ")
+      await this.wait_delay()
+      await this.hero_teleport()
+      break
+    case "硫酸":
+      await this.log("足元から酸がわき出ている！ ")
+      await this.take_damage_shield()
+      break
+    case "トラばさみ":
+      await this.log("トラばさみに かかってしまった！ ")
+      if (! this.hero.held_p() ) {
+        this.hero.status_effects.push( new StatusEffect('held', 10) )
+      }
+      break
+    case "眠りガス":
+      await this.log("足元から 霧が出ている！ ")
+      await this.hero_fall_asleep()
+      break
+    case "石ころ":
+      await this.log("石にけつまずいた！ ")
+      await this.strew_items()
+      break
+    case "矢":
+      await this.log("矢が飛んできた！ ")
+      await this.take_damage(5)
+      break
+    case "毒矢":
+      await this.log("矢が飛んできた！ ")
+      await this.take_damage(5)
+      await this.take_damage_strength(1)
+      break
+    case "地雷":
+      await this.log("足元で爆発が起こった！ ")
+      await this.mine_activate(trap)
+      break
+    case "落とし穴":
+      await this.log("落とし穴だ！ ")
+      await SoundEffects.trapdoor()
+      await this.wait_delay()
+      await this.new_level(+1, false)
+      return // ワナ破損処理をスキップする
+    default:
+      throw new Error 
+    }
+
+    const [tx, ty] = this.level.coordinates_of(trap)
+    if (rand() < 0.5)
+      this.level.remove_object(trap, tx, ty)
+  }
+
+  // 地雷が発動する。
+  async mine_activate(mine)
+  {
+    await this.take_damage( [(this.hero.hp / 2.0).floor(), 1.0].max() )
+
+    const [tx, ty] = this.level.coordinates_of(mine)
+    const rect = this.level.surroundings(tx, ty)
+    const all_coords = []
+    rect.each_coords( (x,y) => all_coords.push([x,y]) )
+
+    for (const [x, y] of all_coords) {
+      if (this.level.in_dungeon_p(x, y)) {
+        const cell = this.level.cell(x, y)
+        if (cell.item) {
+          await this.log(this.display_item(cell.item), "は 消し飛んだ。")
+          cell.remove_object(cell.item)
+          await render()
+        }
+      }
+    }
+
+    for (const [x, y] of all_coords) {
+      if (this.level.in_dungeon_p(x, y)) {
+        const cell = this.level.cell(x, y)
+        if (cell.monster) {
+          cell.monster.hp = 0
+          await render()
+          await this.check_monster_dead(cell, cell.monster)
+        }
+      }
+    }
+  }
+
+  // ヒーロー this.hero が item を拾おうとする。
+  async pick(cell, item)
+  {
+    if (item.stuck) {
+      await this.log(this.display_item(item), "は 床にはりついて 拾えない。")
+    } else {
+      if (this.hero.add_to_inventory(item)) {
+        cell.remove_object(item)
+        this.update_stairs_direction()
+        await this.log(this.hero.name, "は ", this.display_item(item), "を 拾った。")
+      } else {
+        await this.log("持ち物が いっぱいで ", this.display_item(item), "が 拾えない。")
+      }
+    }
+  }
+
+  // (x,y) の罠を見つける。
+  reveal_trap(x, y)
+  {
+    const cell = this.level.cell(x, y)
+    const trap = cell.trap
+    if ( trap && !trap.visible )
+      trap.visible = true
+  }
+
+
+
+
+// .....
   // 新しいフロアに移動する。
   async new_level(dir = +1, shop)
   {
@@ -3059,139 +3459,6 @@ class Program
 
     return new NamingTable(herbs_false.concat(scrolls_false, staves_false, rings_false),
                            herbs_true.concat(scrolls_true, staves_true, rings_true))
-  }
-
-  // ヒーローがワープする。
-  async hero_teleport()
-  {
-    await SoundEffects.teleport()
-
-    const fov = this.level.fov(this.hero.x, this.hero.y)
-    let [x, y] = this.level.find_random_place(
-      (cell, x, y) => cell.type == 'FLOOR' && !cell.monster && !fov.include_p(x, y)
-    ) || [null, null]
-
-    if (x === null) {
-      // 視界内でも良い条件でもう一度検索。
-      [x, y] = this.level.find_random_place(
-        (cell, x, y) => cell.type == 'FLOOR' && !cell.monster
-      )
-    }
-
-    this.hero_change_position(x, y)
-  }
-
-  // ヒーローに踏まれた罠が発動する。
-  async trap_activate(trap)
-  {
-    switch ( trap.name ) {
-    case "ワープゾーン":
-      await this.log("ワープゾーンだ！ ")
-      await this.wait_delay()
-      this.hero_teleport()
-      break
-    case "硫酸":
-      await this.log("足元から酸がわき出ている！ ")
-      this.take_damage_shield()
-      break
-    case "トラばさみ":
-      await this.log("トラばさみに かかってしまった！ ")
-      if (! this.hero.held_p() ) {
-        this.hero.status_effects.push( new StatusEffect('held', 10) )
-      }
-      break
-    case "眠りガス":
-      await this.log("足元から 霧が出ている！ ")
-      this.hero_fall_asleep()
-      break
-    case "石ころ":
-      await this.log("石にけつまずいた！ ")
-      this.strew_items()
-      break
-    case "矢":
-      await this.log("矢が飛んできた！ ")
-      await this.take_damage(5)
-      break
-    case "毒矢":
-      await this.log("矢が飛んできた！ ")
-      await this.take_damage(5)
-      this.take_damage_strength(1)
-      break
-    case "地雷":
-      await this.log("足元で爆発が起こった！ ")
-      await this.mine_activate(trap)
-      break
-    case "落とし穴":
-      await this.log("落とし穴だ！ ")
-      await SoundEffects.trapdoor()
-      await this.wait_delay()
-      this.new_level(+1, false)
-      return // ワナ破損処理をスキップする
-    default:
-      throw new Error 
-    }
-
-    const [tx, ty] = this.level.coordinates_of(trap)
-    if (rand() < 0.5)
-      this.level.remove_object(trap, tx, ty)
-  }
-
-  // 地雷が発動する。
-  async mine_activate(mine)
-  {
-    await this.take_damage( [(this.hero.hp / 2.0).floor(), 1.0].max() )
-
-    const [tx, ty] = this.level.coordinates_of(mine)
-    const rect = this.level.surroundings(tx, ty)
-    const all_coords = []
-    rect.each_coords( (x,y) => all_coords.push([x,y]) )
-
-    for (const [x, y] of all_coords) {
-      if (this.level.in_dungeon_p(x, y)) {
-        const cell = this.level.cell(x, y)
-        if (cell.item) {
-          await this.log(this.display_item(cell.item), "は 消し飛んだ。")
-          cell.remove_object(cell.item)
-          await render()
-        }
-      }
-    }
-
-    for (const [x, y] of all_coords) {
-      if (this.level.in_dungeon_p(x, y)) {
-        const cell = this.level.cell(x, y)
-        if (cell.monster) {
-          cell.monster.hp = 0
-          await render()
-          await this.check_monster_dead(cell, cell.monster)
-        }
-      }
-    }
-  }
-
-  // ヒーロー this.hero が item を拾おうとする。
-  async pick(cell, item)
-  {
-    if (item.stuck) {
-      await this.log(this.display_item(item), "は 床にはりついて 拾えない。")
-    } else {
-      if (this.hero.add_to_inventory(item)) {
-        cell.remove_object(item)
-        this.update_stairs_direction()
-        await this.log(this.hero.name, "は ", this.display_item(item), "を 拾った。")
-      } else {
-        await this.log("持ち物が いっぱいで ", this.display_item(item), "が 拾えない。")
-      }
-    }
-  }
-
-  // (x,y) の罠を見つける。
-  reveal_trap(x, y)
-  {
-    const cell = this.level.cell(x, y)
-    const trap = cell.trap
-    if ( trap && !trap.visible )
-      trap.visible = true
   }
 
 // ...
