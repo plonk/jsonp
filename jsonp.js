@@ -1125,10 +1125,10 @@ class Program
   {
     switch ( action.type ) {
     case 'attack':
-      this.monster_attack(m, action.direction)
+      await this.monster_attack(m, action.direction)
       break
     case 'trick':
-      this.monster_trick(m)
+      await this.monster_trick(m)
       break
     case 'rest':
       // 何もしない。
@@ -2092,7 +2092,7 @@ class Program
         case 'chosen':
           const data = args[0]
 
-          ResultScreen.run(data)
+          await ResultScreen.run(data)
         }
       }
     }
@@ -2690,6 +2690,34 @@ class Program
     } else {
       return 'no_message'
     }
+  }
+
+  // 死んだ時のリザルト画面。
+  async gameover_message()
+  {
+    await SoundEffects.gameover()
+
+    let message
+    if (this.dungeon.on_return_trip_p(this.hero))
+      message = `魔除けを持って${this.level_number}階で力尽きる。`
+    else
+      message = `${this.level_number}階で力尽きる。`
+
+    const data = Object.assign(
+      ResultScreen.to_data(this.hero),
+      {
+        "screen_shot": this.take_screen_shot(),
+        "time": +new Date - this.start_time,
+        "message": message,
+        "level": this.level_number,
+        "return_trip": this.dungeon.on_return_trip_p(this.hero),
+        "timestamp": +new Date,
+      }
+    )
+
+    await ResultScreen.run(data)
+
+    await this.add_to_rankings(data)
   }
 
   async give_up_message()
@@ -3461,7 +3489,7 @@ class Program
   // end
 
   // モンスターの移動・行動フェーズ。
-  monster_phase()
+  async monster_phase()
   {
     // 移動フェーズ。
     const doers = []
@@ -3482,20 +3510,18 @@ class Program
     )
 
     // 行動フェーズ。
-    doers.each(
-      ( [m, action] ) => {
-        if (m.hp < 1.0)
-          return
+    for (const [m, action] of doers) {
+      if (m.hp < 1.0)
+        return
 
-        this.dispatch_action(m, action)
-        if (m.single_attack_p()) {
-          // 攻撃するとAPを使いはたす。
-          m.action_point = 0
-        } else {
-          m.action_point -= 2
-        }
+      await this.dispatch_action(m, action)
+      if (m.single_attack_p()) {
+        // 攻撃するとAPを使いはたす。
+        m.action_point = 0
+      } else {
+        m.action_point -= 2
       }
-    )
+    }
   }
 
   async play()
@@ -3533,7 +3559,7 @@ class Program
               }
             })
           }
-          this.monster_phase()
+          await this.monster_phase()
         }
       }
     } catch(e) {
@@ -3542,7 +3568,7 @@ class Program
 
       await this.log(`${this.hero.name}は ちからつきた。`)
       await this.render()
-      this.gameover_message()
+      await this.gameover_message()
     }
   }
 
