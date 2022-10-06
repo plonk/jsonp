@@ -92,7 +92,16 @@ class Cell
       throw new Error(object.constructor.name)
   }
 
-  // ...
+  put_object(object)
+  {
+    this.objects.push(object)
+    this.objects.sort((a, b) => this.score(a) - this.score(b))
+  }
+ 
+  remove_object(object)
+  {
+    this.objects.delete(object)
+  }
 
   can_place_p()
   {
