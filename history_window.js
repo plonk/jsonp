@@ -22,7 +22,7 @@ class HistoryWindow
         win.addstr("メッセージ履歴")
 
         for (let i = this.top; i <= this.history.size-1; i++) {
-          const y = 1 + i
+          const y = i - this.top + 1
           if (y == 23)
             break
 

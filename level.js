@@ -372,6 +372,43 @@ class Level
     this.tileset = tileset
   }
 
+  make_maze(room)
+  {
+    // 出入口(PASSAGE)は残して部屋の内側をすべて WALL にする。
+    new Range((room.top), (room.bottom)).each(y => {
+      new Range((room.left), (room.right)).each(x => {
+        if (this.dungeon[y][x].type !== 'PASSAGE') {
+          this.dungeon[y][x].type = 'WALL'
+        }
+      })
+    })
+
+    const visited = {}
+
+    const f = (x, y) => {
+      this.dungeon[y][x].type = 'FLOOR'
+      visited[[x,y]] = true
+      ;[[-2,0], [0,-2], [+2,0], [0,+2]].shuffle().each( ([dx, dy]) => {
+        if (!( !room.properly_in_p(x+dx, y+dy) || visited[[x+dx,y+dy]] ) ) {
+          this.dungeon[y+dy/2][x+dx/2].type = 'FLOOR'
+          f(x+dx, y+dy)
+        }
+      })
+    }
+
+    f(room.left + 1, room.top + 1)
+  }
+
+  replace_floor_to_passage(room)
+  {
+    new Range((room.top), (room.bottom)).each( y => {
+      new Range((room.left), (room.right)).each( x => {
+        if (this.dungeon[y][x].type === 'FLOOR') {
+          this.dungeon[y][x].type = 'PASSAGE'
+        }
+      })
+    })
+  }
 
   // add potential connection between rooms
   add_connection(room1, room2, direction)

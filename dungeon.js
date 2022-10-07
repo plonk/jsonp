@@ -7757,6 +7757,16 @@ class Dungeon
     }
   }
 
+  place_item(level, item)
+  {
+    while (true) {
+      const cell = level.cell(...level.get_random_place('FLOOR'))
+      if (cell.can_place_p()) {
+        cell.put_object(item)
+        return
+      }
+    }
+  }
 
   // ...
 
@@ -8081,14 +8091,14 @@ class Dungeon
          hero.inventory.none( item => item.name == "必中会心剣" ) ){
       const sword = Item.make_item("必中会心剣")
       sword.number = 20
-      place_item(level, sword)
+      this.place_item(level, sword)
     }
 
     if ( level_number == 99 && 
          !this.on_return_trip_p(hero) &&
          hero.inventory.none(item => item.name == "退魔の指輪" ) ) {
       const ring = Item.make_item("退魔の指輪")
-      place_item(level, ring)
+      this.place_item(level, ring)
     }
 
     mazes.forEach(

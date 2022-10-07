@@ -135,7 +135,7 @@ class Hero extends StatusEffectPredicates
     return this.strength >= this.max_strength
   }
 
-  hp_maxed()
+  hp_maxed_p()
   {
     return this.hp >= this.max_hp
   }

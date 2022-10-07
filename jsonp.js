@@ -907,7 +907,7 @@ class Program
 
       if (thing) {
         const [x, y] = this.level.coordinates_of_cell(cell)
-        this.item_land(thing, x, y)
+        await this.item_land(thing, x, y)
       }
 
       this.hero.exp += monster.exp
@@ -991,7 +991,7 @@ class Program
 
     while (true) {
       if (momentum == 0) {
-        this.item_land(item, x, y)
+        await this.item_land(item, x, y)
         break
       }
       if (!this.level.in_dungeon_p(x+dx, y+dy) ) {
@@ -1006,7 +1006,7 @@ class Program
       case 'VERTICAL_WALL':
       case 'STATUE':
         if (! penetrating ) {
-          this.item_land(item, x, y)
+          await this.item_land(item, x, y)
           return
         }
         break
@@ -1019,7 +1019,7 @@ class Program
             if ( penetrating ) {
               await this.log(this.display_item(item), "は外れた。")
             } else {
-              this.item_land(item, x+dx, y+dy)
+              await this.item_land(item, x+dx, y+dy)
               break
             }
           } else {
@@ -1101,6 +1101,262 @@ class Program
       this.do_throw_item(item, dir, penetrating, momentum)
     }
     return 'action'
+  }
+
+  // 杖を振るコマンド。
+  // Item -> 'nothing' | 'action'
+  async zap_staff(item)
+  {
+    if (item.type != 'staff')
+      throw new Error    
+
+    const dir = await this.ask_direction()
+    if (!dir) {
+      return 'nothing'
+    } else {
+      if (item.number == 0) {
+        await this.log("しかしなにも起こらなかった。")
+      } else if (item.number > 0) {
+        item.number -= 1
+        await this.do_zap_staff(item, dir)
+      } else {
+        throw new Error( "negative staff number")
+      }
+      return 'action'
+    }
+  }
+
+  // モンスターが睡眠状態になる。
+  async monster_fall_asleep(monster)
+  {
+    if (! monster.asleep_p() ) {
+      monster.status_effects.push(new StatusEffect('sleep', 5))
+      await this.log(`${this.display_character(monster)}は 眠りに落ちた。`)
+    }
+  }
+
+  // モンスターがワープする。
+  async monster_teleport(monster, cell)
+  {
+    await SoundEffects.teleport()
+
+    const fov = this.level.fov(this.hero.x, this.hero.y)
+    const [x, y] = this.level.find_random_place(
+      (cell, x, y) => cell.type == 'FLOOR' && !cell.monster && !(x==this.hero.x && y==this.hero.y) && !fov.include_p(x, y)
+    ) || [null, null]
+    if (x === null) {
+      // 視界内でも良い条件でもう一度検索。
+      [x, y] = this.level.find_random_place(
+        (cell, x, y) => cell.type == 'FLOOR' && !cell.monster && !(x==this.hero.x && y==this.hero.y)
+      ) || [null, null]
+    }
+    if (x === null)
+      throw new Error
+    cell.remove_object(monster)
+    this.level.put_object(monster, x, y)
+    monster.goal = null
+  }
+
+  // モンスターが変化する。
+  async monster_metamorphose(monster, cell, x, y)
+  {
+    while (true) {
+      const m = this.dungeon.make_monster_from_dungeon()
+      if (m.name != monster.name)
+        break 
+      // 病的なケースで無限ループになる。
+    }
+    m.state = 'awake'
+    cell.remove_object(monster)
+    this.level.put_object(m, x, y)
+    m.action_point = m.action_point_recovery_rate
+    await this.log(`${this.display_character(monster)}は ${m.name}に変わった！ `)
+  }
+
+  // モンスターが分裂する。
+  async monster_split(monster, cell, x, y)
+  {
+    const m = Monster.make_monster(monster.name)
+    m.state = 'awake'
+    const rect = this.level.surroundings(x, y)
+    let placed = false
+    try {
+      rect.each_coords( (x, y) => {
+        const cell = this.level.cell(x, y)
+        if ( (cell.type == 'PASSAGE' || cell.type == 'FLOOR') &&
+             !cell.monster &&
+             !(x==this.hero.x && y==this.hero.y)
+           )
+        {
+          this.level.put_object(m, x, y)
+          placed = true
+          throw 'break'
+        }
+      })
+    } catch (v) {
+      if (v != 'break')
+        throw v
+    }
+    if (placed) {
+      await this.log(`${this.display_character(monster)}は 分裂した！ `)
+    } else {
+      await this.log(`${this.display_character(monster)}は 分裂できなかった。`)
+    }
+  }
+
+  async monster_fall_over(monster, cell, x, y)
+  {
+    const item = monster.item || (monster.drop_rate > 0 ? this.dungeon.make_item(this.level_number) : null)
+
+    monster.item = null
+    monster.drop_rate = 0 // 二度目に転んでも何も落とさない。
+
+    if (item) {
+      await this.item_land(item, x, y)
+    }
+
+    await this.monster_take_damage(monster, 5, cell)
+  }
+
+  // 魔法弾がモンスターに当たる。
+  async magic_bullet_hits_monster(staff, monster, cell, x, y)
+  {
+    this.on_monster_attacked(monster)
+    switch ( staff.name ) {
+    case "いかずちの杖":
+      await this.monster_take_damage(monster, rand(new Range(18, 22, true)), cell)
+      break
+    case "睡眠の杖":
+      await this.monster_fall_asleep(monster)
+      break
+    case "ワープの杖":
+      await this.monster_teleport(monster, cell)
+      break
+    case "変化の杖":
+      await this.monster_metamorphose(monster, cell, x, y)
+      break
+    case "転ばぬ先の杖":
+      await this.monster_fall_over(monster, cell, x, y)
+      break
+    case "分裂の杖":
+      await this.monster_split(monster, cell, x, y)
+      break
+    case "もろ刃の杖":
+      monster.hp = 1
+      this.hero.hp = this.hero.hp - (this.hero.hp / 2.0).ceil()
+      await this.log(`${this.display_character(monster)}の HP が 1 になった。`)
+      break
+    case "鈍足の杖":
+      switch ( monster.action_point_recovery_rate ) {
+      case 1:
+        await this.log("しかし 何も起こらなかった。")
+        break
+      case 2:
+        monster.action_point_recovery_rate = 1
+        monster.action_point = 1
+        await this.log(`${this.display_character(monster)}の 足が遅くなった。`)
+        break
+      case 4:
+        monster.action_point_recovery_rate = 2
+        monster.action_point = 2
+        await this.log(`${this.display_character(monster)}の 足はもう速くない。`)
+        break
+      default:
+        throw new Error
+      }
+      break
+    case "封印の杖":
+      if (!monster.nullified_p()) {
+        monster.reveal_self()
+        monster.status_effects.push(new StatusEffect('nullification', Float.INFINITY))
+
+        // 通常速度に変更する。
+        monster.action_point = 2
+        monster.action_point_recovery_rate = 2
+
+        await this.log(`${this.display_character(monster)}の特技は 封印された。`)
+      }
+      break
+    case "即死の杖":
+      monster.hp = 0
+      await this.check_monster_dead(cell, monster)
+      break
+    case "とうめいの杖":
+      if (!monster.invisible) {
+        monster.invisible = true
+      }
+      break
+    case "混乱の杖":
+      if (!monster.confused_p() ) {
+        monster.status_effects.push(new StatusEffect('confused', 10))
+        await this.log(`${this.display_character(monster)}は 混乱した。`)
+      }
+    default:
+      throw new Error("case not covered")
+    }
+  }
+
+  // 杖を振る。
+  async do_zap_staff(staff, dir)
+  {
+    const [dx, dy] = dir
+    let [x, y] = [this.hero.x, this.hero.y]
+
+    while (true) {
+      if (!this.level.in_dungeon_p(x+dx, y+dy)) {
+        throw new Error 
+      }
+
+      const cell = this.level.cell(x+dx, y+dy)
+      switch (cell.type) {
+      case 'WALL':
+      case 'HORIZONTAL_WALL':
+      case 'VERTICAL_WALL':
+        await this.log("魔法弾は壁に当たって消えた。")
+        break
+      case 'STATUE':
+        await this.log("魔法弾は石像に当たって消えた。")
+        break
+      case 'FLOOR':
+      case 'PASSAGE':
+        if (cell.monster) {
+          await this.magic_bullet_hits_monster(staff, cell.monster, cell, x+dx, y+dy)
+          return
+        }
+        break
+      default:
+        throw new Error( "case not covered")
+      }
+      [x, y] = [x+dx, y+dy]
+    }
+  }
+
+  // 最大HPが増える。
+  async increase_max_hp(character, amount)
+  {
+    if (character.max_hp >= 999) {
+      await this.log("これ以上 HP は増えない！ ")
+    } else {
+      const increment = [amount, 999 - character.max_hp].min()
+      character.max_hp += amount
+      character.hp = character.max_hp
+      await this.log(`最大HPが ${increment}ポイント 増えた。`)
+    }
+  }
+
+  // HPが回復する。
+  async increase_hp(character, amount)
+  {
+    const increment = [character.max_hp - character.hp, amount].min()
+    character.hp += increment
+    await this.log(`HPが ${increment.ceil()}ポイント 回復した。`)
+  }
+
+  // ヒーローのちからが回復する。
+  async recover_strength()
+  {
+    this.hero.raw_strength = this.hero.raw_max_strength
+    await this.log("ちからが 回復した。")
   }
 
   // 巻物を読む。
@@ -1996,6 +2252,63 @@ class Program
     }
   }
 
+  // ちからの現在値にダメージを受ける。
+  async take_damage_strength(amount)
+  {
+    if (this.hero.poison_resistent_p())
+      return
+
+    const decrement = [amount, this.hero.raw_strength].min()
+    if (this.hero.raw_strength > 0) {
+      await this.log(`ちからが ${decrement} ポイント下がった。`)
+      this.hero.raw_strength -= decrement
+    } else {
+      // ちから 0 だから平気だもん。
+    }
+  }
+
+  // パンを食べる。
+  async eat_food(food)
+  {
+    if (food.type !== 'food')
+      throw new Error( "not a food" )
+
+    if (this.hero.nullified_p()) {
+      await this.log(this.hero.name, "の 口は封じられていて使えない!")
+      return 'action'
+    }
+
+    this.hero.remove_from_inventory(food)
+    await this.log(`${this.hero.name}は ${food.name}を 食べた。`)
+    switch ( food.name ) {
+    case "パン":
+      if (this.hero.full_p()) {
+        await this.increase_max_fullness(5.0)
+      } else {
+        await this.increase_fullness(50.0)
+      }
+      break
+    case "くさったパン":
+      if (this.hero.full_p()) {
+        await this.increase_max_fullness(10.0)
+      } else {
+        await this.increase_fullness(100.0)
+      }
+      await this.take_damage(10)
+      await this.take_damage_strength(3)
+      break
+    case "大きなパン":
+      if (this.hero.full_p()) {
+        await this.increase_max_fullness(10.0)
+      } else {
+        await this.increase_fullness(100.0)
+      }
+      break
+    default:
+      throw new Error (`food? ${food}`)
+    }
+  }
+
   // ヒーローの名前を付ける。
   async naming_screen()
   {
@@ -2812,9 +3125,9 @@ class Program
   {
     await SoundEffects.heal()
     if (character.hp_maxed_p())
-      this.increase_max_hp(character, amount_maxhp)
+      await this.increase_max_hp(character, amount_maxhp)
     else
-      this.increase_hp(character, amount)
+      await this.increase_hp(character, amount)
   }
 
   // 草がモンスターに当たった時の効果。
@@ -3906,7 +4219,7 @@ class Program
     this.render_map()
     this.render_status()
     const message_status = this.render_message()
-    console.log(message_status)
+    // console.log(message_status)
     Curses.refresh()
 
     this.last_rendered_at = +new Date
@@ -3916,13 +4229,13 @@ class Program
   async wait_delay()
   {
     const t = +new Date
-    console.log({t, last_rendered_at: this.last_rendered_at, DELAY_MILLISECONDS:Program.DELAY_MILLISECONDS})
+    // console.log({t, last_rendered_at: this.last_rendered_at, DELAY_MILLISECONDS:Program.DELAY_MILLISECONDS})
     if (t - this.last_rendered_at < Program.DELAY_MILLISECONDS) {
       await delay( (this.last_rendered_at + Program.DELAY_MILLISECONDS) - t )
     }
-    else {
-      console.log ('no delay')
-    }
+    // else {
+    //   console.log ('no delay')
+    // }
   }
 
   cancel_delay()
@@ -4805,6 +5118,27 @@ class Program
     }
   }
 
+  async curses_test()
+  {
+    const text = " YT45をリリースしました。これまでYTの、YPブラウザとしての機能は最低限だったのですが、今回PecaRecorderを真似して多機能化しました。……とはいっても録画はできませんが（笑）、フィルターによる色分けや無視ができます。\n\nまた、PecaRecorderの設定ファイルを指定して既存のフィルタ設定をインポートすることもできますから、ブラウザでの視聴環境には抵抗のある方もいらっしゃると思いますが、視聴環境の移行とまではいかなくても、サブの環境として整えやすくなったかなと思います。ご査収下さい。\n"
+    print (text)
+    await sleep(500)
+    // Curses.init_screen()
+    // at_exit(() => {
+    //   Curses.close_screen()
+    // })
+    // Curses.noecho()
+    // Curses.crmode()
+
+    // const w = Curses.stdscr
+    // w.addstr(text)
+    // w.refresh
+
+    // while (true) {
+    //   const c = await w.getch()
+    // }
+  }
+
   async main()
   {
     for (const fn of ["font.txt", "font-2.txt", "font-3.txt"]) {
@@ -4816,7 +5150,9 @@ class Program
     STDOUT.writeChar(String.fromCodePoint(0x104026) + String.fromCodePoint(0x104027))
 
     // await this.key_test()
+    // await this.curses_test()
     await this.initial_menu()
+
     Curses.stdscr.clear()
     Curses.stdscr.setpos(0,0)
     Curses.stdscr.addstr("おつ")
