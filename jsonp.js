@@ -806,17 +806,17 @@ class Program
     if (! monster.nullified_p()) {
       if (monster.divide_p() && rand() < 0.5) {
         const [x, y] = this.level.coordinates_of(monster)
-        this.monster_split(monster, cell, x, y)
+        await this.monster_split(monster, cell, x, y)
       } else if (monster.teleport_on_attack_p()) {
         await this.log(`${this.display_character(monster)}は ワープした。`)
-        this.monster_teleport(monster, cell)
+        await this.monster_teleport(monster, cell)
       }
     }
   }
 
   async monster_explode(monster, ground_zero_cell)
   {
-    await this.log("${this.display_character(monster)}は 爆発した！")
+    await this.log(`${this.display_character(monster)}は 爆発した！`)
 
     const [mx, my] = this.level.coordinates_of(monster)
 
@@ -2013,7 +2013,7 @@ class Program
             m.status_effects.push( new StatusEffect('hallucination', Float.INFINITY) )
           }
 
-          this.monster_teleport(m, this.level.cell(... this.level.coordinates_of(m)))
+          await this.monster_teleport(m, this.level.cell(... this.level.coordinates_of(m)))
         } else {
           await this.log(`${this.hero.name}は 何も持っていない。`)
         }

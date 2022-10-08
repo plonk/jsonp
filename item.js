@@ -315,6 +315,8 @@ class Item
     case  "ring":
       if (this.cursed)
         prefix = u(0x10423C)
+      else
+        prefix = ""
 
       return `${prefix}${this.name}`
       break
