@@ -1543,8 +1543,10 @@ class Program
       if ( this.hero.shield && !this.hero.shield.gold_plated ) {
         await this.log(`${this.hero.shield}に メッキがほどこされた！ `)
         this.hero.shield.gold_plated = true
-      } else {
+      } else if (this.hero.shield) {
         await this.log("しかし 盾はすでにメッキされている。")
+      } else {
+        await this.log("しかし 何も起こらなかった。")
       }
       if ( this.hero.shield?.cursed ) {
         this.hero.shield.cursed = false
