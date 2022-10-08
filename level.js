@@ -274,7 +274,7 @@ class Level
     return candidates.sample()
   }
 
-  all_cells_and_positions()
+  get all_cells_and_positions()
   {
     const res = []
     new Range(0, this.height, true).each(y => {
