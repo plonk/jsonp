@@ -1020,7 +1020,7 @@ class Program
               await this.log(this.display_item(item), "は外れた。")
             } else {
               await this.item_land(item, x+dx, y+dy)
-              break
+              return
             }
           } else {
             await SoundEffects.hit()
@@ -1094,11 +1094,11 @@ class Program
       const one = Item.make_item(item.name)
       one.number = 1
       item.number -= 1
-      this.do_throw_item(one, dir, penetrating, momentum)
+      await this.do_throw_item(one, dir, penetrating, momentum)
     } else {
       this.hero.remove_from_inventory(item)
       this.update_stairs_direction()
-      this.do_throw_item(item, dir, penetrating, momentum)
+      await this.do_throw_item(item, dir, penetrating, momentum)
     }
     return 'action'
   }
@@ -2109,6 +2109,12 @@ class Program
     }
   }
 
+  // 64ターンに1回の敵湧き。
+  spawn_monster()
+  {
+    this.dungeon.place_monster(this.level, this.level_number, this.level.fov(this.hero.x, this.hero.y))
+  }
+
 // ...
 
   // 装備する。
@@ -2606,7 +2612,7 @@ class Program
       return await this.main_menu()
 
     case 't':
-      if (this.hero.projectile()) {
+      if (this.hero.projectile) {
         return await this.throw_item(this.hero.projectile)
       } else {
         await this.log("投げ物を装備していない。")
@@ -4079,6 +4085,7 @@ class Program
   async next_turn()
   {
     this.level.turn += 1
+console.log("next_turn", {turn: this.level.turn})
     this.hero.action_point += this.hero.action_point_recovery_rate
     this.recover_monster_action_point()
     await this.status_effects_wear_out()

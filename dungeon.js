@@ -7689,26 +7689,6 @@ class Dungeon
     return m
   }
 
-  // ターン経過でモンスターが湧く時。
-  // rect: 避けるべきヒーローの視界。
-  place_monster(level, level_number, rect)
-  {
-    const list = level.all_cells_and_positions()
-    const possibles = list.filter(([cell, x, y]) => (cell.type == 'FLOOR' && !cell.monster))
-
-    if (possibles.length == 0)
-      throw new Error( "nowhere to put monster")
-
-    const preferred = possibles.filter( ([cell, x, y]) => !rect.include_p(x, y) )
-    let cell
-    if (preferred.length == 0)
-      cell = possibles.sample()[0]
-    else
-      cell = preferred.sample()[0]
-
-    this.spawn_monster(this.make_monster(level_number), cell, level)
-  }
-
   surrounded_by_empty_floor_tiles_p(level, x, y)
   {
     try {

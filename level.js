@@ -1,142 +1,4 @@
 // -*- mode: js; js-indent-level: 2 -*-
-class Cell
-{
-  constructor(type)
-  {
-    this.type = type
-    this.lit = false
-    this.explored = false
-    this.objects = []
-  }
-
-  first_visible_object(globally_lit, visible_p)
-  {
-    return this.objects.find(
-      obj => visible_p(obj, this.lit, globally_lit, this.explored)
-    )
-  }
-
-  background_char(hero_sees_everything, tileset)
-  {
-    const lit = this.lit || hero_sees_everything
-    switch ( this.type ) {
-    case 'STATUE':
-      if (lit)
-        return '\u{104124}\u{104125}' // モアイ像
-      else if (this.explored)
-        return '\u{10403e}\u{10403f}' // 薄闇
-      else
-        return '  '
-      
-    case 'WALL':
-      if (lit || this.explored)
-        return tileset['WALL']
-      else
-        return '  '
-      
-    case 'HORIZONTAL_WALL':
-      if (lit || this.explored)
-        return tileset['HORIZONTAL_WALL']
-      else
-        return '  '
-      
-    case 'VERTICAL_WALL':
-      if (lit || this.explored)
-        return tileset['VERTICAL_WALL']
-      else
-        return '  '
-      
-    case 'FLOOR':
-      if (lit)
-        return '\u{10402a}\u{10402b}' // 部屋の床
-      else if (this.explored)
-        return '\u{10403e}\u{10403f}' // 薄闇
-      else
-        return '  '
-      
-    case 'PASSAGE':
-      if (lit)
-        return '\u{104024}\u{104025}' // 通路
-      else if (this.explored)
-        return '\u{10403e}\u{10403f}' // 薄闇
-      else
-        return '  '
-      
-    default:
-      return '？'
-    }
-  }
-
-  wall_p()
-  {
-    switch (this.type) {
-    case 'WALL':
-    case 'HORIZONTAL_WALL':
-    case 'VERTICAL_WALL':
-      return true
-    default:
-      return false
-    }
-  }
-
-  score(object)
-  {
-    if (object instanceof Monster)
-      return 10
-    else if (object instanceof Gold ||
-             object instanceof Item ||
-             object instanceof StairCase ||
-             object instanceof Trap)
-      return 20
-    else
-      throw new Error(object.constructor.name)
-  }
-
-  put_object(object)
-  {
-    this.objects.push(object)
-    this.objects.sort((a, b) => this.score(a) - this.score(b))
-  }
- 
-  remove_object(object)
-  {
-    this.objects.delete(object)
-  }
-
-  can_place_p()
-  {
-    return (this.type == "FLOOR" || this.type == "PASSAGE") && this.objects.none(
-      x => (x instanceof StairCase || x instanceof Trap || x instanceof Item || x instanceof Gold)
-    )
-  }
-
-  get trap()
-  {
-    return this.objects.find ( x => x instanceof Trap )
-  }
-
-  get monster()
-  {
-    return this.objects.find( x => x instanceof Monster )
-  }
-
-  get item()
-  {
-    return this.objects.find ( x => x instanceof Item)
-  }
-
-  get gold()
-  {
-    return this.objects.find(x => x instanceof Gold)
-  }
-
-  get staircase()
-  {
-    return this.objects.find(x => x instanceof StairCase)
-  }
-  
-}
-
 class StairCase
 {
   constructor(upwards = false)
@@ -151,48 +13,6 @@ class StairCase
     else
       return '\u{104028}\u{104029}'
   }
-}
-
-class Rect
-{
-
-  constructor(top, bottom, left, right) 
-  {
-    this.top = top
-    this.bottom = bottom
-    this.left = left
-    this.right = right
-  }
-
-  each_coords(block)
-  {
-    for (let y = this.top; y <= this.bottom; y++)
-      for (let x = this.left; x <= this.right; x++)
-        block(x, y)
-  }
-
-  async each_coords_async(block)
-  {
-    for (let y = this.top; y <= this.bottom; y++)
-      for (let x = this.left; x <= this.right; x++)
-        await block(x, y)
-  }
-
-  each(block) { this.each_coords(block) }
-
-  include_p(x, y)
-  {
-    return x >= this.left && x <= this.right && y >= this.top && y <= this.bottom
-  }
-}
-
-Array.new = function(n, f) {
-  const arr = new Array(n)
-  if (f)
-    for (let i = 0; i < arr.length; i++)
-      arr[i] = f(i)
-
-  return arr
 }
 
 class Level
@@ -410,6 +230,78 @@ class Level
     })
   }
 
+  first_visible_object(x, y, visible_p)
+  {
+    return this.dungeon[y][x].first_visible_object(this.whole_level_lit, visible_p)
+  }
+
+  background_char(x, y)
+  {
+    return this.dungeon[y][x].background_char(this.whole_level_lit, this.tileset)
+  }
+
+  get width()
+  {
+    return this.dungeon[0].length
+  }
+
+  get height()
+  {
+    return this.dungeon.length
+  }
+
+  get_random_place(kind)
+  {
+    const candidates = new Range(0, this.height, true /* exclude_end */).to_a().flatMap(
+      y => new Range(0, this.width, true).to_a().flatMap(
+        x => this.dungeon[y][x].type == kind ? [[x, y]] : []
+      )
+    )
+    return candidates.sample()
+  }
+
+  // pred: Proc(cell, x, y)
+  find_random_place(pred)
+  {
+    const candidates = []
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        if (pred(this.dungeon[y][x], x, y)) {
+          candidates.push( [x, y] )
+        }
+      }
+    }
+    return candidates.sample()
+  }
+
+  all_cells_and_positions()
+  {
+    const res = []
+    new Range(0, this.height, true).each(y => {
+      new Range(0, this.width, true).each(x => {
+        res.push( [this.dungeon[y][x], x, y] )
+      })
+    })
+    return res
+  }
+
+  each_coords(f)
+  {
+    new Range(0, this.height, true).each(y => {
+      new Range(0, this.width, true).each( x => {
+        f(x, y)
+      })
+    })
+  }
+
+  // def r(n)
+  //   if false
+  //     0
+  //   else
+  //     rand(n)
+  //   end
+  // end
+
   // add potential connection between rooms
   add_connection(room1, room2, direction)
   {
@@ -505,48 +397,38 @@ class Level
     return res
   }
 
-  first_visible_object(x, y, visible_p)
+  in_dungeon_p(x, y)
   {
-    return this.dungeon[y][x].first_visible_object(this.whole_level_lit, visible_p)
+    return x.between_p(0, this.width-1) && y.between_p(0, this.height-1)
   }
 
-  background_char(x, y)
+  // (x, y)地点での視野 Rect を返す。
+  fov(x, y)
   {
-    return this.dungeon[y][x].background_char(this.whole_level_lit, this.tileset)
+    const r = this.room_at(x, y)
+    if (r)
+      return new Rect(r.top, r.bottom, r.left, r.right)
+    else
+      return this.surroundings(x, y)
   }
 
-  get width()
+  surroundings(x, y)
   {
-    return this.dungeon[0].length
+    const top = [0, y-1].max()
+    const bottom = [this.height-1, y+1].min()
+    const left = [0, x-1].max()
+    const right = [this.width-1, x+1].min()
+    return new Rect(top, bottom, left, right)
   }
 
-  get height()
+  light_up(fov)
   {
-    return this.dungeon.length
+    fov.each_coords((x, y) => this.dungeon[y][x].lit = true)
   }
 
-  get_random_place(kind)
+  mark_explored(fov)
   {
-    const candidates = new Range(0, this.height, true /* exclude_end */).to_a().flatMap(
-      y => new Range(0, this.width, true).to_a().flatMap(
-        x => this.dungeon[y][x].type == kind ? [[x, y]] : []
-      )
-    )
-    return candidates.sample()
-  }
-
-  // pred: Proc(cell, x, y)
-  find_random_place(pred)
-  {
-    const candidates = []
-    for (let y = 0; y < this.height; y++) {
-      for (let x = 0; x < this.width; x++) {
-        if (pred(this.dungeon[y][x], x, y)) {
-          candidates.push( [x, y] )
-        }
-      }
-    }
-    return candidates.sample()
+    fov.each_coords((x, y) => this.dungeon[y][x].explored = true)
   }
 
   cell(x, y)
@@ -613,9 +495,9 @@ class Level
     return res
   }
 
-  monster_count()
+  get monster_count()
   {
-    return this.all_monsters_with_position().length
+    return this.all_monsters_with_position.length
   }
 
   can_move_to_p(m, mx, my, tx, ty)
@@ -653,42 +535,6 @@ class Level
         return [x, y]
     }
   }
-
-  in_dungeon_p(x, y)
-  {
-    return x.between_p(0, this.width-1) && y.between_p(0, this.height-1)
-  }
-
-  // (x, y)地点での視野 Rect を返す。
-  fov(x, y)
-  {
-    const r = this.room_at(x, y)
-    if (r)
-      return new Rect(r.top, r.bottom, r.left, r.right)
-    else
-      return this.surroundings(x, y)
-  }
-
-  surroundings(x, y)
-  {
-    const top = [0, y-1].max()
-    const bottom = [this.height-1, y+1].min()
-    const left = [0, x-1].max()
-    const right = [this.width-1, x+1].min()
-    return new Rect(top, bottom, left, right)
-  }
-
-  light_up(fov)
-  {
-    fov.each_coords((x, y) => this.dungeon[y][x].lit = true)
-  }
-
-  mark_explored(fov)
-  {
-    fov.each_coords((x, y) => this.dungeon[y][x].explored = true)
-  }
-
-// ...
 
   coordinates_of_cell(cell)
   {
@@ -805,4 +651,11 @@ Array.prototype.count = function(){
   }
 }
 
+Array.new = function(n, f) {
+  const arr = new Array(n)
+  if (f)
+    for (let i = 0; i < arr.length; i++)
+      arr[i] = f(i)
 
+  return arr
+}
