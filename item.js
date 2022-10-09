@@ -297,6 +297,11 @@ class Item
     }
   }
 
+  toString()
+  {
+    return this.to_s()
+  }
+
   to_s()
   {
     const ws_num_fmt = (r) => {

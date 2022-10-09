@@ -300,6 +300,7 @@ const Curses = {
 
   init_screen()
   {
+    print("\x1b[?1049h")
   },
 
   start_color()
@@ -316,6 +317,8 @@ const Curses = {
 
   close_screen()
   {
+    print("\x1b[?1049l")
+    console.log("close screen")
   },
 
   init_pair(n, fg, bg)
@@ -560,15 +563,19 @@ const NamingScreen = {
           }
         } else {
           const c = this.LAYERS[layer_index][y-1][x]
-          if (c == "゛" && DAKUON_TABLE[name[name.length-1]])
-            name[name.length-1] = DAKUON_TABLE[name[name.length-1]]
-          else if (c == "゜" && HANDAKUON_TABLE[name[name.length-1]])
-            name[name.length-1] = HANDAKUON_TABLE[name[name.length-1]]
-          else {
-            if (name.length == 6)
-              name[5] = c
-            else
+          console.log( { name, c })
+          if (c == "゛" || c == "゜") {
+            if (c == "゛" && name.length > 0 && NamingScreen.DAKUON_TABLE[name[name.length-1]]) {
+              name = name.slice(0, name.length - 1) + NamingScreen.DAKUON_TABLE[name[name.length-1]]
+            } else if (c == "゜" && name.length > 0 && NamingScreen.HANDAKUON_TABLE[name[name.length-1]]) {
+              name = name.slice(0, name.length - 1) + NamingScreen.HANDAKUON_TABLE[name[name.length-1]]
+            }
+          } else {
+            if (name.length == 6) {
+              name = name.slice(0, 5) + c
+            } else {
               name += c
+            }
           }
         }
         break
@@ -638,8 +645,8 @@ class Action
     this.type = type
     this.direction = direction
   }
-}
 
+}
 class Program
 {
   static DIRECTIONS = [[0,-1], [1,-1], [1,0], [1,1], [0,1], [-1,1], [-1,0], [-1,-1]]
@@ -756,7 +763,7 @@ class Program
   {
     const monsters = this.level.all_monsters_with_position.map( ([m, x, y]) =>  m )
 
-    for (let m of monsters.concat( [this.hero] )) {
+    for (const m of monsters.concat( [this.hero] )) {
       m.status_effects.each( e => e.remaining_duration -= 1 )
 
       const expired_effects = []
@@ -768,7 +775,7 @@ class Program
           return expired
         }
       )
-      for (let e of expired_effects) {
+      for (const e of expired_effects) {
         await this.on_status_effect_expire(m, e)
       }
     }
@@ -1160,9 +1167,10 @@ class Program
   // モンスターが変化する。
   async monster_metamorphose(monster, cell, x, y)
   {
+    let m
     while (true) {
-      const m = this.dungeon.make_monster_from_dungeon()
-      if (m.name != monster.name)
+      m = this.dungeon.make_monster_from_dungeon()
+      if (m.name !== monster.name)
         break 
       // 病的なケースで無限ループになる。
     }
@@ -1291,6 +1299,7 @@ class Program
         monster.status_effects.push(new StatusEffect('confused', 10))
         await this.log(`${this.display_character(monster)}は 混乱した。`)
       }
+      break
     default:
       throw new Error("case not covered")
     }
@@ -1425,13 +1434,13 @@ class Program
     case "パンの巻物":
       {
         // 装備中のアイテムだったら装備状態を解除する。
-        if ( this.hero.weapon.equal_p(target) ) {
+        if ( this.hero.weapon === target ) {
           this.hero.weapon = null
         }
-        if ( this.hero.shield.equal_p(target) ) {
+        if ( this.hero.shield === target ) {
           this.hero.shield = null
         }
-        if ( this.hero.ring.equal_p(target) ) {
+        if ( this.hero.ring === target ) {
           this.hero.ring = null
         }
 
@@ -1466,10 +1475,10 @@ class Program
   async choose_target()
   {
     const dispfunc = (win, item) => {
-      const prefix = (this.hero.weapon.equal_p(item) ||
-                      this.hero.shield.equal_p(item) ||
-                      this.hero.ring.equal_p(item)   ||
-                      this.hero.projectile.equal_p(item)) ? "E" : " "
+      const prefix = (this.hero.weapon === item ||
+                      this.hero.shield === item ||
+                      this.hero.ring === item   ||
+                      this.hero.projectile === item) ? "E" : " "
       this.addstr_ml(win, ["span", prefix, item.char, this.display_item(item)])
     }
 
@@ -3028,7 +3037,7 @@ class Program
             else
               nickname = null
 
-            nickname = NamingScreen.run(nickname)
+            nickname = await NamingScreen.run(nickname)
             this.naming_table.set_nickname(item.name, nickname)
             return null
           } else {
@@ -3369,7 +3378,7 @@ class Program
         } else if (cell.monster) {
           // FIXME: これだと主人公に経験値が入ってしまうな
           if (rand() < 0.125) {
-            await this.SoundEffects.miss()
+            await SoundEffects.miss()
             await this.item_land(item, x+dx, y+dy)
           } else {
             await SoundEffects.hit()
@@ -3664,6 +3673,17 @@ class Program
   update_stairs_direction()
   {
     this.level.stairs_going_up = this.dungeon.on_return_trip_p(this.hero)
+  }
+
+  async shop_interaction()
+  {
+    Curses.stdscr.clear()
+    Curses.stdscr.refresh()
+    await this.message_window("階段の途中で行商人に出会った。")
+    Curses.stdscr.clear()
+    Curses.stdscr.refresh()
+    const shop = new Shop(this.hero, this.display_item.bind(this), this.addstr_ml.bind(this))
+    await shop.run()
   }
 
   // 部屋の出入りでモンスターが起きる。
@@ -5209,6 +5229,7 @@ console.log("next_turn", {turn: this.level.turn})
   }
 }
 
+let $prog
 window.addEventListener('load', async () => {
   var kbdBuffer = "";
   var transmitter;
@@ -5389,12 +5410,16 @@ window.addEventListener('load', async () => {
   STDIN = ttyInputPort
   STDOUT = ttyOutputPort
   const prog = new Program()
+  $prog = prog
   try {
     await prog.main()
   } finally {
     for (let i = Finalizers.length - 1; i >= 0; i--)
       Finalizers[i]()
   }
+
+  print("おつ")
+
   //ttyOutputPort.writeChar("[Program Exited]")
 });
 

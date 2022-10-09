@@ -72,7 +72,7 @@ class Hero extends StatusEffectPredicates
     }
   }
 
-  equipped(x)
+  equipped_p(x)
   {
     return x === this.weapon ||
       x === this.shield ||
@@ -117,7 +117,7 @@ class Hero extends StatusEffectPredicates
 
   full_p()
   {
-    return this.fullness > max_fullness - 1.0
+    return this.fullness > this.max_fullness - 1.0
   }
 
   increase_fullness(amount)
@@ -157,7 +157,7 @@ class Hero extends StatusEffectPredicates
 
   sleep_resistent_p()
   {
-    return thisi.ring?.name == "眠らずの指輪"
+    return this.ring?.name == "眠らずの指輪"
   }
 
   puppet_resistent_p()
