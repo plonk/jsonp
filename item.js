@@ -392,7 +392,7 @@ class Item
 
   rustproof_p()
   {
-    this.rustproof || this.gold_plated
+    return this.rustproof || this.gold_plated
   }
 
   get sort_priority()
