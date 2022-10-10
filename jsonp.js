@@ -2303,11 +2303,11 @@ class Program
   {
     await this.log(this.display_item(item), `が ${this.hero.name}に当たった。`)
     if (item.type == 'projectile')
-      this.take_damage(this.attack_to_hero_damage(item.projectile_strength))
+      await this.take_damage(this.attack_to_hero_damage(item.projectile_strength))
     else if (item.type == 'weapon' || item.type == 'shield')
-      this.take_damage(this.attack_to_hero_damage(item.number))
+      await this.take_damage(this.attack_to_hero_damage(item.number))
     else
-      this.take_damage(this.attack_to_hero_damage(1))
+      await this.take_damage(this.attack_to_hero_damage(1))
   }
 
   // モンスターがアイテムを投げる。矢を撃つ敵の行動。
@@ -2380,16 +2380,16 @@ class Program
 
       case 'FLOOR':
       case 'PASSAGE':
-        if ([x+dx, y+dy] == [this.hero.x, this.hero.y]) {
+        if ([x+dx, y+dy].eql_p(this.hero.pos)) {
           let damage = rand(new Range(17, 23))
           if (this.hero.shield?.name == "ドラゴンシールド") {
             damage = damage.div(2)
           }
-          this.take_damage(damage)
+          await this.take_damage(damage)
           return
         } else if (cell.monster) {
           // FIXME: これだと主人公に経験値が入ってしまうな
-          this.monster_take_damage(cell.monster, rand(new Range(17,23)), cell)
+          await this.monster_take_damage(cell.monster, rand(new Range(17,23)), cell)
           return
         }
         break
@@ -3141,8 +3141,9 @@ class Program
       return 'action'
     }
 
+    let vec
     if (item.name == "火炎草") {
-      const vec = await this.ask_direction()
+      vec = await this.ask_direction()
       if (!vec) {
         return 'nothing'
       }
@@ -3173,7 +3174,7 @@ class Program
       break
 
     case "毒けし草":
-      if (this.hero.strength_maxed_p()) {
+      if (!this.hero.strength_maxed_p()) {
         await this.recover_strength()
       }
       break
@@ -3263,7 +3264,7 @@ class Program
         }
 
         if (cell.monster) {
-          this.monster_take_damage(cell.monster, rand(new Range(65, 75, true)), cell)
+          await this.monster_take_damage(cell.monster, rand(new Range(65, 75, true)), cell)
         }
       }
       break
@@ -3305,7 +3306,6 @@ class Program
       this.hero.max_hp = [this.hero.max_hp - 5, 1].max()
       this.hero.hp = [this.hero.hp, this.hero.max_hp].min()
       await this.log(`${this.hero.name}の レベルが下がった。`)
-      await SoundEffects.fanfare2()
     }
   }
 
@@ -4343,9 +4343,9 @@ class Program
       const damage = ( ( attack * Math.pow(15.0/16.0, defender.defense) ) * (112 + rand(32))/128.0 ).to_i()
 
       if (attack === 0) {
-        await this.log("${assailant.name}は 様子を見ている。")
+        await this.log(`${assailant.name}は 様子を見ている。`)
       } else {
-        await this.log("${assailant.name}の こうげき！ ")
+        await this.log(`${assailant.name}の こうげき！ `)
         this.on_monster_attacked(defender)
         await this.monster_take_damage(defender, damage, this.level.cell(... target))
       }
@@ -4418,6 +4418,7 @@ class Program
       break
     case 'パペット':
       await this.log(`${m.name}は おどりをおどった。`)
+      await SoundEffects.fanfare2()
       if (this.hero.puppet_resistent_p())
         await this.log(`しかし ${this.hero.name}は平気だった。`)
       else
