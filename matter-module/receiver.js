@@ -334,6 +334,15 @@ Receiver.prototype.cursorPosition = function (args_str) {
   var y = (args[0] || '1') - 1;
   var x = (args[1] || '1') - 1;
 
+  if (x < 0 || x >= this.columns) {
+    console.warn(`cursorPosition: x (=${x}) is out of range, will be clamped`);
+    x = Math.max(0, Math.min(x, this.columns - 1));
+  }
+  if (y < 0 || y >= this.rows) {
+    console.warn(`cursorPosition: y (=${y}) is out of range, will be clamped`);
+    y = Math.max(0, Math.min(y, this.rows - 1));
+  }
+
   if (this.originModeRelative) {
     this.cursor_y = y + this.scrollingRegionTop;
     this.cursor_x = x;
