@@ -821,9 +821,29 @@ class Program
 
   create_naming_table_easy_mode()
   {
-    const table = this.create_naming_table_hard_mode()
-    table.true_names.each(name => table.identify(name))
-    return table
+    const get_item_names_by_kind =
+          specified => Item.ITEMS.filter( ([kind, name, number, desc]) => kind == specified ).map( ([_kind, name, _number, _desc]) => name )
+
+    const take_strict = (n, arr) => {
+      if ( arr.length < n )
+        throw new Error("list too short")
+      return arr.take(n)
+    }
+
+    let staves_false  = ["鉄の杖", "銅の杖", "鉛の杖", "銀の杖", "金の杖", "アルミの杖", "真鍮の杖",
+                         "ヒノキの杖", "杉の杖", "桜の杖", "松の杖", "キリの杖", "ナラの杖", "ビワの杖"]
+    let rings_false   = ["金剛石の指輪", "翡翠の指輪", "猫目石の指輪", "水晶の指輪", // "タイガーアイの指輪",
+                         "瑪瑙の指輪", "天河石の指輪","琥珀の指輪","孔雀石の指輪","珊瑚の指輪","電気石の指輪",
+                         "真珠の指輪","葡萄石の指輪","蛍石の指輪","紅玉の指輪","フォーダイトの指輪", "黒曜石の指輪"]
+
+    const staves_true  = get_item_names_by_kind('staff')
+    const rings_true   = get_item_names_by_kind('ring')
+
+    staves_false  = take_strict(staves_true.length, staves_false.shuffle())
+    rings_false   = take_strict(rings_true.length, rings_false.shuffle())
+
+    return new NamingTable([].concat(staves_false, rings_false),
+                           [].concat(staves_true, rings_true))
   }
 
   create_naming_table_hard_mode()
@@ -2789,7 +2809,7 @@ class Program
     await this.log(this.display_item(scroll), "を 読んだ。")
     await SoundEffects.magic()
 
-    if ( this.naming_table.identified_p(scroll.name) ) {
+    if (this.naming_table.include_p(scroll.name) && ! this.naming_table.identified_p(scroll.name) ) {
       this.naming_table.identify(scroll.name)
       await this.log(`なんと！ ${scroll.name}だった！`)
     }
@@ -2906,7 +2926,7 @@ class Program
     await this.log(this.display_item(item), "を 読んだ。")
     await SoundEffects.magic()
 
-    if (! this.naming_table.identified_p(item.name) ) {
+    if (this.naming_table.include_p(item.name) && !this.naming_table.identified_p(item.name) ) {
       this.naming_table.identify(item.name)
       await this.log(`なんと！ ${item.name}だった！`)
     }
@@ -3134,7 +3154,7 @@ class Program
     this.hero.remove_from_inventory(item)
     await this.log(this.display_item(item), "を 薬にして 飲んだ。")
 
-    if (! this.naming_table.identified_p(item.name)) {
+    if (this.naming_table.include_p(item.name) && !this.naming_table.identified_p(item.name)) {
       this.naming_table.identify(item.name)
       await this.log(`なんと！ ${item.name}だった！`)
     }
@@ -3378,9 +3398,9 @@ class Program
       await this.log(this.display_item(item), "を 外した。")
     } else {
       this.hero.ring = item
-      if (!item.inspected) {
-        item.inspected = true
-      }
+      // if (!item.inspected) {
+      //   item.inspected = true
+      // }
       await this.log(this.display_item(item), "を 装備した。")
       await SoundEffects.weapon()
       if (item.cursed) {
