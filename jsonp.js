@@ -4157,68 +4157,64 @@ class Program
     }
   }
 
-  // def monster_confused_action(m, mx, my)
-  //   candidates = []
-  //   rect = @level.surroundings(mx, my)
-  //   rect.each_coords do |x, y|
-  //     next unless @level.in_dungeon?(x, y) &&
-  //                 (@level.cell(x, y).type == :FLOOR ||
-  //                  @level.cell(x, y).type == :PASSAGE)
-  //     if @level.can_move_to_terrain?(m, mx, my, x, y) &&
-  //        @level.cell(x, y).item&.name != "結界の巻物"
-  //       candidates << [x, y]
-  //     end
-  //   end
-  //   if candidates.any?
-  //     x, y = candidates.sample
-  //     if [x,y] == @hero.pos || @level.cell(x,y).monster
-  //       return Action.new(:attack, [x-mx, y-my])
-  //     else
-  //       return Action.new(:move, [x - mx, y - my])
-  //     end
-  //   else
-  //     return Action.new(:rest, nil)
-  //   end
-  // end
+  monster_confused_action(m, mx, my)
+  {
+    const candidates = []
+    const rect = this.level.surroundings(mx, my)
+    rect.each_coords((x, y) => {
+      if (!( this.level.in_dungeon_p(x, y) &&
+             (this.level.cell(x, y).type == 'FLOOR' ||
+              this.level.cell(x, y).type == 'PASSAGE'))) {
+        return
+      }
 
-  // def monster_blind_action(m, mx, my)
-  //   target = nil
-  //   dx, dy = m.facing
-  //   applicable_p = lambda { |x, y|
-  //     if @level.in_dungeon?(x,y) &&
-  //        (@level.cell(x,y).type==:FLOOR || @level.cell(x,y).type==:PASSAGE) &&
-  //        @level.can_move_to_terrain?(m, mx, my, x, y) &&
-  //        @level.cell(x,y).item&.name != "結界の巻物"
-  //       true
-  //     else
-  //       false
-  //     end
-  //   }
-  //   attack_or_move = lambda { |x, y|
-  //     if [x,y] == @hero.pos || @level.cell(x,y).monster
-  //       return Action.new(:attack, [x-mx, y-my])
-  //     else
-  //       return Action.new(:move, [x-mx, y-my])
-  //     end
-  //   }
+      if (this.level.can_move_to_terrain_p(m, mx, my, x, y) &&
+          this.level.cell(x, y).item?.name !== "結界の巻物") {
+        candidates.push([x, y])
+      }
+    })
 
-  //   if applicable_p.(mx+dx, my+dy)
-  //     return attack_or_move.(mx+dx, my+dy)
-  //   else
-  //     candidates = []
-  //     @level.surroundings(mx, my).each_coords do |x, y|
-  //       if applicable_p.(x, y)
-  //         candidates << [x,y]
-  //       end
-  //     end
+    if (candidates.size > 0) {
+      const [x, y] = candidates.sample()
+      if ([x,y].eql_p(this.hero.pos) || this.level.cell(x,y).monster) {
+        return new Action('attack', [x-mx, y-my])
+      } else {
+        return new Action('move', [x - mx, y - my])
+      }
+    } else {
+      return new Action('rest', null)
+    }
+  }
 
-  //     if candidates.any?
-  //       x, y = candidates.sample
-  //       m.facing = [x-mx, y-my]
-  //     end
-  //     return Action.new(:rest, nil)
-  //   end
-  // end
+  monster_blind_action(m, mx, my)
+  {
+    const [dx, dy] = m.facing
+    const applicable_p =
+          (x, y) => (this.level.in_dungeon_p(x,y) &&
+                     (this.level.cell(x,y).type=='FLOOR' || this.level.cell(x,y).type=='PASSAGE') &&
+                     this.level.can_move_to_terrain_p(m, mx, my, x, y) &&
+                     this.level.cell(x,y).item?.name != "結界の巻物")
+
+    const attack_or_move =
+          (x, y) => ([x,y].eql_p(this.hero.pos) || this.level.cell(x,y).monster) ? new Action('attack', [x-mx, y-my]) : new Action('move', [x-mx, y-my])
+    
+    if (applicable_p(mx+dx, my+dy)) {
+      return attack_or_move(mx+dx, my+dy)
+    } else {
+      const candidates = []
+      this.level.surroundings(mx, my).each_coords((x, y) => {
+        if (applicable_p(x, y)) {
+          candidates.push([x,y])
+        }
+      })
+
+      if (candidates.size > 0) {
+        const [x, y] = candidates.sample()
+        m.facing = [x-mx, y-my]
+      }
+      return new Action('rest', null)
+    }
+  }
 
   adjacent_p(v1, v2)
   {
