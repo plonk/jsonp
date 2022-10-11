@@ -4753,17 +4753,17 @@ class Program
 
   sort_ranking_by_score(ranking)
   {
-    return ranking.sort( (a,b) => b["gold"] < a["gold"] )
+    return ranking.sort( (a,b) => b["gold"] - a["gold"] )
   }
 
   sort_ranking_by_time(ranking)
   {
-    return ranking.sort( (a,b) => a["time"] < b["time"] )
+    return ranking.sort( (a,b) => a["time"] - b["time"] )
   }
 
   sort_ranking_by_timestamp(ranking)
   {
-    return ranking.sort( (a,b) => b["timestamp"] < a["timestamp"] )
+    return ranking.sort( (a,b) => b["timestamp"] - a["timestamp"] )
   }
 
   // ランキング表示画面。
