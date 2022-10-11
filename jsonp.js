@@ -5485,11 +5485,19 @@ Array.prototype.reject = function(f)
 
 Array.prototype.index = function(value)
 {
-  const i = this.findIndex( elt => eql_p(elt,value) )
-  if (i == -1)
-    return null
-  else
-    return i
+  if (value instanceof Function) {
+    const i = this.findIndex(value)
+    if (i === -1)
+      return null
+    else
+      return i
+  } else {
+    const i = this.findIndex( elt => eql_p(elt,value) )
+    if (i == -1)
+      return null
+    else
+      return i
+  }
 }
 
 Array.prototype.take = function(n)
