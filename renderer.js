@@ -656,7 +656,11 @@ function setup()
     force_redraw = true;
   }
 
-  render = function() {
+  let prevTimestamp;
+  render = function(timestamp) {
+    if (prevTimestamp === timestamp)
+      return;
+
     if (soundBuffer.length > 0) {
       console.log("addnotes", soundBuffer);
       if (soundSystem.addNotes(soundBuffer)) {
@@ -676,6 +680,7 @@ function setup()
       }
     }
     frame++;
+    prevTimestamp = timestamp;
     window.requestAnimationFrame(render)
   };
   window.requestAnimationFrame(render);
