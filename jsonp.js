@@ -2734,10 +2734,12 @@ class Program
       case 'HORIZONTAL_WALL':
       case 'VERTICAL_WALL':
         await this.log("魔法弾は壁に当たって消えた。")
-        break
+        return
+
       case 'STATUE':
         await this.log("魔法弾は石像に当たって消えた。")
-        break
+        return
+
       case 'FLOOR':
       case 'PASSAGE':
         if (cell.monster) {
