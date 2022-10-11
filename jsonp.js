@@ -2780,6 +2780,7 @@ class Program
   {
     this.hero.raw_strength = this.hero.raw_max_strength
     await this.log("ちからが 回復した。")
+    await SoundEffects.heal()
   }
 
   // 巻物を読む。
@@ -2859,9 +2860,11 @@ class Program
         }
 
         const index = this.hero.inventory.index( i => target === i )
-        if ( index ) {
+        if ( index !== null ) {
           this.hero.inventory[index] = Item.make_item("大きなパン")
           await this.log(this.display_item(target), "は ", this.display_item(this.hero.inventory[index]), "に変わってしまった！")
+          await sleep(0.5)
+          await SoundEffects.mealtime()
         } else { // パンの巻物にパンの巻物を読んだ。
           await this.log("しかし 何も起こらなかった。")
         }
@@ -2937,7 +2940,7 @@ class Program
     case "あかりの巻物":
       this.level.whole_level_lit = true
       await this.log("ダンジョンが あかるくなった。")
-    break
+      break
     case "武器強化の巻物":
       if ( this.hero.weapon ) {
         this.hero.weapon.number += 1
@@ -2949,7 +2952,7 @@ class Program
       } else {
         await this.log("しかし 何も起こらなかった。")
       }
-    break
+      break
     case "盾強化の巻物":
       if ( this.hero.shield ) {
         this.hero.shield.number += 1
@@ -2961,7 +2964,7 @@ class Program
       } else {
         await this.log("しかし 何も起こらなかった。")
       }
-    break
+      break
     case "メッキの巻物":
       if ( this.hero.shield && !this.hero.shield.gold_plated ) {
         await this.log(`${this.hero.shield}に メッキがほどこされた！ `)
@@ -2975,7 +2978,7 @@ class Program
         this.hero.shield.cursed = false
         await this.log("盾の呪いが 解けた。")
       }
-    break
+      break
     case "かなしばりの巻物":
       {
         const monsters = []
@@ -2990,7 +2993,7 @@ class Program
         if (monsters.size > 0 ) {
           monsters.each(m => {
             if (!m.paralyzed_p()) {
-              m.status_effects.push(StatusEffect.new('paralysis', 50))
+              m.status_effects.push(new StatusEffect('paralysis', 50))
             }
           })
           await this.log("まわりの モンスターの動きが 止まった。")
@@ -3001,7 +3004,7 @@ class Program
       break
     case "結界の巻物":
       await this.log("何も起こらなかった。足元に置いて使うようだ。")
-    break
+      break
     case "やりなおしの巻物":
       if ( this.dungeon.on_return_trip_p(this.hero) ) {
         await this.log("帰り道では 使えない。")
@@ -3009,9 +3012,10 @@ class Program
         await this.log("しかし何も起こらなかった。")
       } else {
         await this.log("不思議なちからで 1階 に引き戻された！ ")
-        this.new_level(1 - this.level_number, false)
+        await SoundEffects.teleport()
+        await this.new_level(1 - this.level_number, false)
       }
-    break
+      break
     case "爆発の巻物":
       await this.log("空中で 爆発が 起こった！ ")
       await this.attack_monsters_in_room(new Range(5,35))
@@ -4842,6 +4846,7 @@ class Program
         "スコア番付",
         "タイム番付",
         "最近のプレイ",
+        "サウンドテスト",
         "終了",
       ],
       { y: 0, x: 0, cols: 16 })
@@ -4886,6 +4891,10 @@ class Program
                                  )
         break
 
+      case "サウンドテスト":
+        await this.sound_test()
+        break
+
       case "終了":
         return
 
@@ -4894,6 +4903,29 @@ class Program
       }
     }
     await this.initial_menu()
+  }
+
+  async sound_test()
+  {
+    const tunes = []
+    for (let prop of Object.getOwnPropertyNames(SoundEffects)) {
+      if (prop === 'name' || prop === 'length' || prop === 'prototype')
+        continue
+
+      tunes.push(prop)
+    }
+
+    const menu = new Menu(tunes, { y: 0, x: 0, cols: 16 })
+
+    while (true) {
+      const [c, tune] = await menu.choose()
+      if (c === 'cancel')
+        break
+
+      if (c === 'chosen') {
+        await SoundEffects[tune]()
+      }
+    }
   }
 
   async intrude_party_room()
