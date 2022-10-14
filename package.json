@@ -1,0 +1,25 @@
+{
+  "name": "jsonp",
+  "version": "1.0.0",
+  "description": "Web Scheme programming environment",
+  "main": "index.html",
+  "dependencies": {
+    "CBuffer": "^2.2.0",
+    "eastasianwidth": "^0.2.0",
+    "jquery": "^3.6.1"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/plonk/jsonp.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/plonk/jsonp/issues"
+  },
+  "homepage": "https://github.com/plonk/jsonp#readme"
+}
