@@ -356,14 +356,3 @@ class Monster extends StatusEffectPredicates
   }
 
 }
-
-// Array#reject!
-Array.prototype.reject_d = function(pred) {
-  for (let i = 0; i < this.length; ) {
-    if (pred(this[i])) {
-      this.splice(i, 1)
-    } else
-      i++
-  }
-  return this
-}

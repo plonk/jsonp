@@ -105,5 +105,3 @@ class ResultScreen
     }
   }
 }
-
-Object.defineProperty(String.prototype, 'size', { get() { return this.length } })

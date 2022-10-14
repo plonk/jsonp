@@ -650,12 +650,3 @@ Array.prototype.count = function(){
     throw new Error("0 or 1 arguments expected")
   }
 }
-
-Array.new = function(n, f) {
-  const arr = new Array(n)
-  if (f)
-    for (let i = 0; i < arr.length; i++)
-      arr[i] = f(i)
-
-  return arr
-}
