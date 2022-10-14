@@ -5206,19 +5206,17 @@ console.log("next_turn", {turn: this.level.turn})
   {
     for (const fn of ["font.txt", "font-2.txt", "font-3.txt"]) {
       STDOUT.writeChar(`Loading ${fn} ... `)
+      await sleep(0.2)
       const font = $ASSETS[fn]
       STDOUT.writeChar(font)
       STDOUT.writeChar(`${font.length} bytes \n`)
     }
     STDOUT.writeChar(String.fromCodePoint(0x104026) + String.fromCodePoint(0x104027))
+    await sleep(0.5)
 
     // await this.key_test()
     // await this.curses_test()
     await this.initial_menu()
-
-    Curses.stdscr.clear()
-    Curses.stdscr.setpos(0,0)
-    Curses.stdscr.addstr("おつ")
     return
 
     const tune = Sound.compile([
