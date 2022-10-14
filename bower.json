@@ -1,0 +1,23 @@
+{
+  "name": "jsonp",
+  "description": "Osiire",
+  "main": "index.html",
+  "authors": [
+    "Yoteichi <plonk.yote1@gmail.com>"
+  ],
+  "license": "ISC",
+  "homepage": "https://github.com/plonk/jsonp",
+  "private": true,
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "bootstrap": "^3",
+    "strftime": "^0.10.1",
+    "sprintf": "^1.1.2"
+  }
+}
