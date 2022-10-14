@@ -352,27 +352,27 @@ class SoundEffects extends Sound {
   static async mealtime()
   {
     const tune = this.compile([
-      ['note', 275, 'f#4', 50],
-      ['rest', 125],
+      ['note', 150, 'f#4', 50],
+      ['rest', 250],
       ['note', 150, 'f#4', 50],
       ['rest', 50],
       ['note', 150, 'f#4', 50],
       ['rest', 50],
-      ['note', 375, 'f#4', 50],
-      ['rest', 25],
-      ['note', 375, 'f#4', 50],
-      ['rest', 25],
+      ['note', 150, 'f#4', 50],
+      ['rest', 250],
+      ['note', 150, 'f#4', 50],
+      ['rest', 250],
 
-      ['note', 275, 'a#4', 50],
-      ['rest', 125],
+      ['note', 150, 'a#4', 50],
+      ['rest', 250],
       ['note', 150, 'a#4', 50],
       ['rest', 50],
       ['note', 150, 'a#4', 50],
       ['rest', 50],
-      ['note', 375, 'a#4', 50],
-      ['rest', 25],
-      ['note', 375, 'a#4', 50],
-      ['rest', 25],
+      ['note', 150, 'a#4', 50],
+      ['rest', 250],
+      ['note', 150, 'a#4', 50],
+      ['rest', 250],
 
       ['note', 575, 'f#4', 50],
       ['rest', 25],
@@ -384,38 +384,38 @@ class SoundEffects extends Sound {
       ['note', 375, 'a#4', 50],
       ['rest', 25],
 
-      ['note', 250, 'c#4', 50],
-      ['rest', 150],
-      ['note', 250, 'c#4', 50],
-      ['rest', 150],
-      ['note', 375, 'c#4', 50],
-      ['rest', 25],
+      ['note', 150, 'c#4', 50],
+      ['rest', 250],
+      ['note', 150, 'c#4', 50],
+      ['rest', 250],
+      ['note', 150, 'c#4', 50],
+      ['rest', 250],
 
       ['rest', 400],
 
       // ----
 
-      ['note', 275, 'f#4', 50],
-      ['rest', 125],
+      ['note', 150, 'f#4', 50],
+      ['rest', 250],
       ['note', 150, 'f#4', 50],
       ['rest', 50],
       ['note', 150, 'f#4', 50],
       ['rest', 50],
-      ['note', 375, 'f#4', 50],
-      ['rest', 25],
-      ['note', 375, 'f#4', 50],
-      ['rest', 25],
+      ['note', 150, 'f#4', 50],
+      ['rest', 250],
+      ['note', 150, 'f#4', 50],
+      ['rest', 250],
 
-      ['note', 275, 'a#4', 50],
-      ['rest', 125],
+      ['note', 150, 'a#4', 50],
+      ['rest', 250],
       ['note', 150, 'a#4', 50],
       ['rest', 50],
       ['note', 150, 'a#4', 50],
       ['rest', 50],
-      ['note', 375, 'a#4', 50],
-      ['rest', 25],
-      ['note', 375, 'a#4', 50],
-      ['rest', 25],
+      ['note', 150, 'a#4', 50],
+      ['rest', 250],
+      ['note', 150, 'a#4', 50],
+      ['rest', 250],
 
       ['note', 575, 'f#4', 50],
       ['rest', 25],
@@ -434,7 +434,7 @@ class SoundEffects extends Sound {
       ['note', 900, 'f#4', 50],
       ['rest', 100],
 
-    ])
+    ].map( ([com, dur, ...rest]) => [com, dur/1.75, ... rest] ) )
     await this.play(tune)
   }
 
