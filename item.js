@@ -266,7 +266,7 @@ class Item
     this.inspected = false
   }
 
-  original_number()
+  get original_number()
   {
     const row = Item.ITEMS.find(r => r[1] == this.name)
     if (row)
@@ -277,7 +277,7 @@ class Item
 
   relative_number()
   {
-    const n = this.original_number()
+    const n = this.original_number
     if (n)
       return this.number - n
     else
@@ -453,12 +453,12 @@ class Item
     if (this._desc)
       return this._desc
 
-    switch (type) {
+    switch (this.type) {
     case "weapon":
-      return `強さ${original_number}の武器だ。`
+      return `強さ${this.original_number}の武器だ。`
       break
     case "shield":
-      return `強さ${original_number}の盾だ。`
+      return `強さ${this.original_number}の盾だ。`
       break
     case "projectile":
       return "投げて使う。"
