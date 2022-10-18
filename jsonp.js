@@ -4876,7 +4876,7 @@ class Program
         await this.ranking_screen("タイム番付", Program.TIME_RANKING_FILE_NAME,
                                   (win, data) =>{
                                     const name = data["hero_name"] + ('　'.times(6-data["hero_name"].size))
-                                    const time = format_time(data["time"])
+                                    const time = this.format_time(data["time"])
                                     win.addstr(`${time}  ${name}  ${this.format_timestamp(data["timestamp"])}  ${data["message"]}`)
                                   }
                                  )
