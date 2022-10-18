@@ -5445,6 +5445,14 @@ window.addEventListener('load', async () => {
   $prog = prog
   try {
     await prog.main()
+  } catch(e) {
+    Curses.stdscr.setpos(1, 0)
+    print( "\x1b[31;43m" )
+    print( sprintf("エラー: %s\n", e.message) )
+    print( e.stack )
+    Curses.timeout = -1
+    while (true)
+      await Curses.getch()
   } finally {
     for (let i = Finalizers.length - 1; i >= 0; i--)
       Finalizers[i]()
