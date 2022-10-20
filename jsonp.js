@@ -3207,7 +3207,7 @@ class Program
         break
 
       case false:
-        this.hero.status_effects.push(new StatusEffect('quick', 3))
+        this.hero.status_effects.push(new StatusEffect('quick', 5))
         await this.log(`${this.hero.name}の 足が速くなった。`)
         this.hero.action_point = 2
         break
