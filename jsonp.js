@@ -4098,10 +4098,14 @@ class Program
 
     if (m.goal) {
       // * 目的地があれば目的地へ向かう。(方向のpreferenceが複雑)
-      const dir = Vec.normalize(Vec.minus(m.goal, [mx, my]))
+      const relgoal = Vec.minus(m.goal, [mx, my])
+      const dir = Vec.normalize(relgoal)
       const i = Program.DIRECTIONS.index(dir)
       console.log({name:m.name, goal:m.goal, dir, i })
-      for (let [dx, dy] of [i, ...[i - 1, i + 1].shuffle(), ...[i - 2, i + 2].shuffle()].map(j => Program.DIRECTIONS[j.mod(8)])) {
+      const dirs = [i, ...[i - 1, i + 1].shuffle(), ...[i - 2, i + 2].shuffle()]
+            .map( j => Program.DIRECTIONS[j.mod(8)] )
+            .sort( (a,b) => Vec.chess_distance(a, relgoal) - Vec.chess_distance(b, relgoal) )
+      for (let [dx, dy] of dirs) {
         if (this.level.can_move_to_p(m, mx, my, mx+dx, my+dy) &&
            ![mx+dx, my+dy].eql_p( [this.hero.x, this.hero.y] )&&
            this.level.cell(mx+dx, my+dy).item?.name != "結界の巻物") {
