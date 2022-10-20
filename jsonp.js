@@ -5064,10 +5064,9 @@ class Program
   async next_turn()
   {
     this.level.turn += 1
-console.log("next_turn", {turn: this.level.turn})
+    await this.status_effects_wear_out()
     this.hero.action_point += this.hero.action_point_recovery_rate
     this.recover_monster_action_point()
-    await this.status_effects_wear_out()
     await this.hero_fullness_decrease()
     if (this.level.turn % 64 == 0 && this.level.monster_count < 25)
       this.spawn_monster()
