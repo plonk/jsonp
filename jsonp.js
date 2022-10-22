@@ -662,7 +662,7 @@ class Program
 
   constructor()
   {
-    this.debug = true
+    this.debug = false
     this.hard_mode = false
     this.default_name = null
 
