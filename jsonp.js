@@ -1554,7 +1554,7 @@ class Program
 
     case '?':
       return await this.help()
-
+ 
     case 'h': case 'j': case 'k': case 'l': case 'y': case 'u': case 'b': case 'n':
     case 'H': case 'J': case 'K': case 'L': case 'Y': case 'U': case 'B': case 'N':
     case Curses.KEY_LEFT: case  Curses.KEY_RIGHT: case  Curses.KEY_UP: case  Curses.KEY_DOWN:
@@ -1587,7 +1587,7 @@ class Program
       return await this.activate_underfoot()
 
     case 'q':
-      await this.log("冒険をあきらめるには大文字の Q を押してね。")
+      //await this.log("冒険をあきらめるには大文字の Q を押してね。")
       return 'nothing'
 
     case 'Q':
@@ -5221,46 +5221,6 @@ class Program
     // await this.curses_test()
     await this.initial_menu()
     return
-
-    const tune = Sound.compile([
-      ['note', Math.round(800 * 0.6), 'c5', 40],
-      ['note', Math.round(600 * 0.6), 'b4', 40],
-      ['note', Math.round(200 * 0.6), 'f4', 40],
-      ['note', Math.round(400 * 0.6), 'a4', 40],
-      ['note', Math.round(400 * 0.6), 'g4', 40],
-      ['note', Math.round(400 * 0.6), 'f4', 40],
-      ['note', Math.round(400 * 0.6), 'd4', 40],
-
-      ['note', Math.round(400 * 0.6), 'c4', 40],
-      ['note', Math.round(200 * 0.6), 'b3', 40],
-      ['note', Math.round(200 * 0.6), 'c4', 40],
-
-      ['note', Math.round(400 * 0.6), 'e4', 40],
-      ['note', Math.round(200 * 0.6), 'd4', 40],
-      ['note', Math.round(200 * 0.6), 'e4', 40],
-      ['note', Math.round(800 * 0.6), 'd4', 40],
-      ['note', Math.round(400 * 0.6), 'c4', 40],
-    ])
-
-    await Sound.play(tune)
-
-    //const win = new Curses.Window(5, 7, 5, 33)
-    const win = new Curses.Window(5, 7, 5, 33)
-    win.clear()
-    win.rounded_box()
-    win.setpos(0, 1)
-    win.addstr("方向")
-    // for (let cp = 0x104230; cp <= 0x104237; cp++)
-    //   win.addstr(String.fromCodePoint(cp))
-    win.setpos(1, 1)
-    win.addstr("y k u")
-    win.setpos(2, 1)
-    win.addstr("h   l")
-    win.setpos(3, 1)
-    win.addstr("b j n")
-    win.setpos(2, 3)
-    await win.getch()
-    print("[Program Exited]")
   }
 }
 

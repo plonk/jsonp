@@ -92,7 +92,7 @@ class Item
     ["weapon", "鉄の斧", 4, null],
     ["weapon", "ドラゴンキラー", 5, null],
     ["weapon", "メタルヨテイチの剣", 7, null],
-    ["weapon", "エンドゲーム", 10, null],
+    ["weapon", "正義の電卓", 10, null],
     ["weapon", "必中会心剣", 20, "必ず当たり、会心の一撃が出る事もある強さ20の剣。"],
     ["projectile", "木の矢", null, "強さ4の矢。"],
     ["projectile", "鉄の矢", null, "強さ12の矢。"],

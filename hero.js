@@ -23,6 +23,11 @@ class Hero extends StatusEffectPredicates
     this.name = "名無しさん"
     this.action_point = 0
     this.invisible = false
+
+    this.weapon = null
+    this.shield = null
+    this.ring = null
+    this.projectile = null
   }
 
   get strength()
