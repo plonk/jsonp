@@ -2858,6 +2858,9 @@ class Program
         if ( this.hero.ring === target ) {
           this.hero.ring = null
         }
+        if ( this.hero.projectile === target ) {
+          this.hero.projectile = null
+        }
 
         const index = this.hero.inventory.index( i => target === i )
         if ( index !== null ) {
