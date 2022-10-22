@@ -5241,17 +5241,6 @@ window.addEventListener('load', async () => {
   var kbdBuffer = "";
   var transmitter;
   var windowFocused = true;
-  var interrupted = false;
-
-  function updateBusyIndicator() {
-    if (interrupted) {
-      $('#indicator-busy').hide();
-      $('#indicator-idle').show();
-    } else {
-      $('#indicator-busy').show();
-      $('#indicator-idle').hide();
-    }
-  }
 
   transmitter = new Transmitter({
     write: function (str) {
@@ -5314,12 +5303,6 @@ window.addEventListener('load', async () => {
 
     if (e.key === 'F12') // デベロッパーツールズ
       return;
-
-    if (e.key === 'Pause') {
-      e.preventDefault();
-      interrupted = true;
-      // updateBusyIndicator();
-    }
 
     if (true) {
       e.preventDefault();
@@ -5411,8 +5394,6 @@ window.addEventListener('load', async () => {
     windowFocused = true;
     force_redraw = true;
   };
-
-  updateBusyIndicator();
 
   STDIN = ttyInputPort
   STDOUT = ttyOutputPort
