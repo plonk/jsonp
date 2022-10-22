@@ -4087,7 +4087,8 @@ class Program
     }
 
     // * モンスターの視界内にヒーローが居れば目的地を再設定。
-    if (!(!m.nullified_p() && m.hallucinating_p()) && this.level.fov(mx, my).include_p(this.hero.x, this.hero.y)) {
+    if (!(!m.nullified_p() && m.hallucinating_p()) &&
+        this.level.fov(mx, my).include_p(this.hero.x, this.hero.y)) {
       m.goal = [this.hero.x, this.hero.y]
     }
 
@@ -4126,9 +4127,17 @@ class Program
       const room = this.level.room_at(mx, my)
       if (room) {
         const exit_points = this.level.room_exits(room)
-        const preferred = exit_points.reject(
-          ([x,y]) => [x,y].eql_p( [mx - m.facing[0], my - m.facing[1]]) // 今入ってきた出入口は除外する。
-        )
+        let preferred
+        if ((!m.nullified_p() && m.hallucinating_p()) &&
+           this.level.fov(mx, my).include_p(this.hero.x, this.hero.y)) {
+          preferred = exit_points.filter(
+            ([x,y]) => [x,y].eql_p( [mx - m.facing[0], my - m.facing[1]])
+          )
+        } else {
+          preferred = exit_points.reject(
+            ([x,y]) => [x,y].eql_p( [mx - m.facing[0], my - m.facing[1]]) // 今入ってきた出入口は除外する。
+          )
+        }
         if (preferred.length > 0) {
           m.goal = preferred.sample()
           return this.monster_action(m, mx, my)
