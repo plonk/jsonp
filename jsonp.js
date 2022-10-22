@@ -4865,7 +4865,7 @@ class Program
         "サウンドテスト",
         "終了",
       ],
-      { y: 0, x: 0, cols: 16 })
+      { y: 0, x: 0, cols: 17 })
     const [cmd, ... args] = await menu.choose()
     switch (cmd) {
     case 'cancel':
