@@ -2367,7 +2367,7 @@ class Program
     let [x, y] = [mx, my]
 
     while (true) {
-      if (this.level.in_dungeon_p(x+dx, y+dy))
+      if (!this.level.in_dungeon_p(x+dx, y+dy))
         throw new Error
 
       const cell = this.level.cell(x+dx, y+dy)
