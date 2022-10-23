@@ -257,7 +257,7 @@ class Monster extends StatusEffectPredicates
   {
     if (this._name == "化け狸") {
       this.impersonating_name = this._name
-      this.impersonating_char = this.char
+      this.impersonating_char = this._char
     }
   }
 
