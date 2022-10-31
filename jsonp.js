@@ -1255,7 +1255,7 @@ class Program
 
   async hero_change_position(x1, y1)
   {
-    [this.hero.x, this.hero.y] = [x1, y1]
+    this.hero.pos = [x1, y1]
     this.hero.status_effects.reject_d( e => e.type == 'held' )
     this.level.update_lighting(x1, y1)
     if (this.last_room != this.current_room) {
@@ -1453,7 +1453,7 @@ class Program
   // 周り8マスをワナチェックする
   search()
   {
-    const [x, y] = [this.hero.x, this.hero.y]
+    const [x, y] = this.hero.pos
 
     ;[[0,-1], [1,-1], [1,0], [1,1], [0,1], [-1,1], [-1,0], [-1,-1]].each( ( [xoff, yoff] ) => {
       // 敵の下のワナは発見されない。
@@ -2331,7 +2331,7 @@ class Program
 
       case 'FLOOR':
       case 'PASSAGE':
-        if ([x+dx, y+dy].eql_p( [this.hero.x, this.hero.y])) {
+        if ([x+dx, y+dy].eql_p(this.hero.pos)) {
           if (rand() < 0.125) {
             await SoundEffects.miss()
             await this.item_land(item, x+dx, y+dy)
@@ -2406,7 +2406,7 @@ class Program
   async do_throw_item(item, dir, penetrating, momentum)
   {
     const [dx, dy] = dir
-    let [x, y] = [this.hero.x, this.hero.y]
+    let [x, y] = this.hero.pos
 
     while (true) {
       if (momentum == 0) {
@@ -2721,7 +2721,7 @@ class Program
   async do_zap_staff(staff, dir)
   {
     const [dx, dy] = dir
-    let [x, y] = [this.hero.x, this.hero.y]
+    let [x, y] = this.hero.pos
 
     while (true) {
       if (!this.level.in_dungeon_p(x+dx, y+dy)) {
@@ -3260,7 +3260,7 @@ class Program
       {
         await this.log(`${this.hero.name}は 口から火を はいた！ `)
 
-        const [tx, ty] = Vec.plus([this.hero.x, this.hero.y], vec)
+        const [tx, ty] = Vec.plus(this.hero.pos, vec)
         if (! this.level.in_dungeon_p(tx, ty)) {
           throw new Error 
         }
@@ -4046,7 +4046,7 @@ class Program
 
     case 'line':
       return ( this.level.fov(mx, my).include_p(this.hero.x, this.hero.y) &&
-               this.aligned_p([mx, my], [this.hero.x, this.hero.y]) )
+               this.aligned_p([mx, my], this.hero.pos) )
     case 'reach':
       return ( this.level.can_attack_p(m, mx, my, this.hero.x, this.hero.y) )
 
@@ -4089,7 +4089,7 @@ class Program
     // * モンスターの視界内にヒーローが居れば目的地を再設定。
     if (!(!m.nullified_p() && m.hallucinating_p()) &&
         this.level.fov(mx, my).include_p(this.hero.x, this.hero.y)) {
-      m.goal = [this.hero.x, this.hero.y]
+      m.goal = this.hero.pos
     }
 
     // * 目的地がある場合...
@@ -4111,7 +4111,7 @@ class Program
             .sort( (a,b) => Vec.chess_distance(a, relgoal) - Vec.chess_distance(b, relgoal) )
       for (let [dx, dy] of dirs) {
         if (this.level.can_move_to_p(m, mx, my, mx+dx, my+dy) &&
-           ![mx+dx, my+dy].eql_p( [this.hero.x, this.hero.y] )&&
+           ![mx+dx, my+dy].eql_p(this.hero.pos) &&
            this.level.cell(mx+dx, my+dy).item?.name != "結界の巻物") {
           return new Action('move', [dx, dy])
         }
@@ -4161,7 +4161,7 @@ class Program
         ].shuffle()
         for (const [dx, dy] of dirs) {
           if (this.level.can_move_to_p(m, mx, my, mx+dx, my+dy) &&
-              ![mx+dx, my+dy].eql_p( [this.hero.x, this.hero.y] ) &&
+              ![mx+dx, my+dy].eql_p(this.hero.pos) &&
               this.level.cell(mx+dx, my+dy).item?.name != "結界の巻物") {
             return new Action('move', [dx,dy])
           }
@@ -4185,7 +4185,7 @@ class Program
               this.level.cell(x, y).type == 'PASSAGE')) )
         return
 
-      if (![x,y].eql_p( [this.hero.x,this.hero.y] ) &&
+      if (![x,y].eql_p(this.hero.pos) &&
           this.level.can_move_to_p(m, mx, my, x, y) &&
           this.level.cell(x, y).item?.name != "結界の巻物")
         candidates.push( [x, y] )
@@ -4304,7 +4304,7 @@ class Program
         else if (!m.nullified_p() && m.tipsy_p() && rand() < 0.5 ) // ちどり足。
           return this.monster_tipsy_move_action(m, mx, my)
 
-        else if ( this.adjacent_p([mx, my], [this.hero.x, this.hero.y]) &&
+        else if ( this.adjacent_p([mx, my], this.hero.pos) &&
                   this.level.cell(this.hero.x, this.hero.y).item?.name == "結界の巻物" )
           return this.monster_move_action(m, mx, my) // new Action('rest', null)
 
@@ -4316,7 +4316,7 @@ class Program
           if (m.name == "動くモアイ像")
             m.status_effects.reject_d(x => x.type == 'held')
 
-          return new Action('attack', Vec.minus([this.hero.x, this.hero.y], [mx, my]))
+          return new Action('attack', Vec.minus(this.hero.pos, [mx, my]))
         } else
           return this.monster_move_action(m, mx, my)
 
@@ -4424,7 +4424,7 @@ class Program
     case 'ピューシャン':
       {
         const [mx, my] = this.level.coordinates_of(m)
-        const dir = Vec.normalize(Vec.minus([this.hero.x, this.hero.y], [mx, my]))
+        const dir = Vec.normalize(Vec.minus(this.hero.pos, [mx, my]))
         const arrow = Item.make_item('木の矢')
         arrow.number = 1
         await this.monster_throw_item(m, arrow, mx, my, dir)
@@ -4497,7 +4497,7 @@ class Program
     case '竜':
       {
         const [mx, my] = this.level.coordinates_of(m)
-        const dir = Vec.normalize(Vec.minus([this.hero.x, this.hero.y], [mx, my]))
+        const dir = Vec.normalize(Vec.minus(this.hero.pos, [mx, my]))
         await this.log(`${m.name}は 火を吐いた。`)
         await this.breath_of_fire(m, mx, my, dir)
       }

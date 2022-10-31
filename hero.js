@@ -201,6 +201,11 @@ class Hero extends StatusEffectPredicates
     return [this.x, this.y]
   }
 
+  set pos(vec)
+  {
+    [this.x, this.y] = vec
+  }
+
   critical_p()
   {
     return this.weapon?.name == "必中会心剣"
