@@ -1,10 +1,11 @@
 // -*- mode: js; js-indent-level: 2 -*-
 'use strict';
 
-const NamingScreen = {
-  COMMAND_ROW: ["かなカナ英数", "おまかせ", "けす", "おわる"],
+class NamingScreen
+{
+  static COMMAND_ROW = ["かなカナ英数", "おまかせ", "けす", "おわる"]
 
-  LAYERS: [
+  static LAYERS = [
     [
       "あいうえおはひふへほ",
       "かきくけこまみむめも",
@@ -32,9 +33,9 @@ const NamingScreen = {
       "ｋｌｍｎｏｐｑｒｓｔ",
       "ｕｖｗｘｙｚ　　　　",
     ],
-  ],
+  ]
 
-  DAKUON_TABLE: {
+  static DAKUON_TABLE = {
     "う" : "ゔ",
     "は" : "ば",
     "ひ" : "び",
@@ -78,9 +79,9 @@ const NamingScreen = {
     "ツ" : "ヅ",
     "テ" : "デ",
     "ト" : "ド",
-  },
+  }
 
-  HANDAKUON_TABLE: {
+  static HANDAKUON_TABLE = {
     "は" : "ぱ",
     "ひ" : "ぴ",
     "ふ" : "ぷ",
@@ -92,17 +93,17 @@ const NamingScreen = {
     "フ" : "プ",
     "ヘ" : "ペ",
     "ホ" : "ポ",
-  },
+  }
 
-  OMAKASE_NAMES: [
+  static OMAKASE_NAMES = [
     "よてえもん",
     "ＸＡＸＡ",
     "ヌヌー",
     "ばんたけ",
     "ＯＬ",
-  ],
+  ]
 
-  async run(default_name = null)
+  static async run(default_name = null)
   {
     let name = default_name || ""
     let layer_index = 0
@@ -298,3 +299,4 @@ const NamingScreen = {
     }
   }
 }
+
