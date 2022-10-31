@@ -3,8 +3,6 @@
 
 class NamingScreen
 {
-  static COMMAND_ROW = ["かなカナ英数", "おまかせ", "けす", "おわる"]
-
   static LAYERS = [
     [
       "あいうえおはひふへほ",
@@ -103,7 +101,7 @@ class NamingScreen
     "ＯＬ",
   ]
 
-  static async run(default_name = null)
+  static async run(default_name = null, candidates = [])
   {
     let name = default_name || ""
     let layer_index = 0
@@ -114,6 +112,13 @@ class NamingScreen
     // top margin
     // (Curses.lines - 13)/2
     const tm = 3
+
+    let command_row
+    if (candidates.size > 0) {
+      command_row = ["かなカナ英数", "おぎなう", "けす", "おわる"]
+    } else {
+      command_row = ["かなカナ英数", "おまかせ", "けす", "おわる"]
+    }
 
     const next_omakase = () => {
       let i = this.OMAKASE_NAMES.findIndex((elt) => elt === name)
@@ -140,6 +145,21 @@ class NamingScreen
     const keyboard = new Curses.Window(10, 44, tm+3, (Curses.cols - 44).div(2))
     keyboard.keypad(true)
 
+    const sharedPrefix = function (...words) {
+      if (words.length === 0)
+        return ""//throw "no arguments given"
+      const minlen = Math.min(... words.map(w => w.length))
+      let result = ""
+      for (let i = 0; i < minlen; i++) {
+        for (let j = 1; j < words.length; j++) {
+          if (words[j][i] !== words[0][i])
+            return result
+        }
+        result += words[0][i]
+      }
+      return result
+    }
+
     const handle_input = (c) => {
       switch (c) {
       case 9:
@@ -152,15 +172,15 @@ class NamingScreen
 
       case 'h':
       case Curses.KEY_LEFT:
-        x = (x - 1).mod(y == 0 ? this.COMMAND_ROW.length : this.LAYERS[layer_index][y-1].length)
+        x = (x - 1).mod(y == 0 ? command_row.length : this.LAYERS[layer_index][y-1].length)
         break
 
       case 'j':
       case Curses.KEY_DOWN:
         {
-          const old_length = (y == 0 ? this.COMMAND_ROW.length : this.LAYERS[layer_index][y-1].length)
+          const old_length = (y == 0 ? command_row.length : this.LAYERS[layer_index][y-1].length)
           y = (y + 1).mod(this.LAYERS[layer_index].length + 1)
-          const new_length = (y == 0 ? this.COMMAND_ROW.length : this.LAYERS[layer_index][y-1].length)
+          const new_length = (y == 0 ? command_row.length : this.LAYERS[layer_index][y-1].length)
           x = Math.floor(x / old_length * new_length)
         }
         break
@@ -168,16 +188,16 @@ class NamingScreen
       case 'k':
       case Curses.KEY_UP:
         {
-          const old_length = (y == 0 ? this.COMMAND_ROW.length : this.LAYERS[layer_index][y-1].length)
+          const old_length = (y == 0 ? command_row.length : this.LAYERS[layer_index][y-1].length)
           y = (y - 1).mod(this.LAYERS[layer_index].length + 1)
-          const new_length = (y == 0 ? this.COMMAND_ROW.length : this.LAYERS[layer_index][y-1].length)
+          const new_length = (y == 0 ? command_row.length : this.LAYERS[layer_index][y-1].length)
           x = Math.floor(x / old_length * new_length)
         }
         break
 
       case 'l':
       case Curses.KEY_RIGHT:
-        x = (x + 1).mod(y == 0 ? this.COMMAND_ROW.length : this.LAYERS[layer_index][y-1].length)
+        x = (x + 1).mod(y == 0 ? command_row.length : this.LAYERS[layer_index][y-1].length)
         break
 
       case 'y':
@@ -212,14 +232,22 @@ class NamingScreen
 
       case 10:
         if (y == 0) {
-          switch (this.COMMAND_ROW[x]) {
+          switch (command_row[x]) {
           case "かなカナ英数":
             layer_index = (layer_index + 1) % this.LAYERS.length
             break
 
           case "おまかせ":
-            console.log("next omakase")
             name = next_omakase()
+            break
+
+          case "おぎなう":
+            {
+              const completion = sharedPrefix(... candidates.filter(str => str.startsWith(name)))
+              if (!candidates.include_p(completion))
+                Curses.beep()
+              name = completion
+            }
             break
 
           case "けす":
@@ -268,7 +296,7 @@ class NamingScreen
           keyboard.clear()
           keyboard.rounded_box()
           keyboard.setpos(1, 1)
-          keyboard.addstr("  " + this.COMMAND_ROW.join("　"))
+          keyboard.addstr("  " + command_row.join("　"))
 
           this.LAYERS[layer_index].forEach((row, ypos) => {
             ypos += 2
@@ -278,7 +306,7 @@ class NamingScreen
         }
 
         if (y == 0) {
-          keyboard.setpos(1, 3 + this.COMMAND_ROW.slice(0, x).join("").length*2 + x*2)
+          keyboard.setpos(1, 3 + command_row.slice(0, x).join("").length*2 + x*2)
         } else {
           keyboard.setpos(1 + y, 3 + 4*x)
         }
@@ -299,4 +327,3 @@ class NamingScreen
     }
   }
 }
-

@@ -122,6 +122,10 @@ const Curses = {
     return this.stdscr.timeout
   },
 
+  beep() {
+    print("\x07") // BEL
+  },
+
   Window: class {
     constructor(lines, cols, y, x)
     {
@@ -1706,7 +1710,15 @@ class Program
             else
               nickname = null
 
-            nickname = await NamingScreen.run(nickname)
+            let completion_candidates
+            {
+              const idx_type = 0
+              const idx_furigana = 4
+              completion_candidates = Item.ITEMS
+                .filter(i => i[idx_type] == item.type && i[idx_furigana])
+                .map(i => i[idx_furigana])
+            }
+            nickname = await NamingScreen.run(nickname, completion_candidates)
             this.naming_table.set_nickname(item.name, nickname)
             return null
           } else {
