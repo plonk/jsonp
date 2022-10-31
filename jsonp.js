@@ -1493,7 +1493,7 @@ class Program
   // アイテムに適用可能な行動
   actions_for_item(item)
   {
-    const actions = item.actions.slice(0)
+    const actions = item.actions.dup()
     if (!this.naming_table.include_p(item.name) || this.naming_table.identified_p(item.name)) {
     } else {
       actions.push("名前")

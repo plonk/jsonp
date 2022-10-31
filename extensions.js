@@ -223,3 +223,7 @@ Array.prototype.reject_d = function(pred) {
 }
 
 Object.defineProperty(String.prototype, 'size', { get() { return this.length } })
+
+Array.prototype.dup = function() {
+  return this.slice(0)
+}
