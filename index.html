@@ -52,6 +52,7 @@
     <script src="dungeon.js"></script>
     <script src="shop.js"></script>
     <script src="jsonp.js"></script>
+    <script src="unifont.js"></script>
 
     <!-- アプリケーションCSS -->
     <link rel="stylesheet" href="index.css">
@@ -59,6 +60,25 @@
   <body style="background-color: #111; color: #eee">
 
     <div class="container">
+      <div style="margin-top: 10px; margin-left: 15px; color: #eee; margin-right: 10px">
+        Font:
+        <select id="font-type" style="background-color: #333; color: #eee">
+          <option value=system selected>System</option>
+          <option value=browser>Browser</option>
+        </select>
+
+        <select id="font-size" style="background-color: #333; color: #eee">
+          <option value=10>10</option>
+          <option value=12>12</option>
+          <option value=14>14</option>
+          <option value=16 selected>16</option>
+          <option value=20>20</option>
+          <option value=24>24</option>
+          <option value=32>32</option>
+        </select>
+        px
+
+      </div>
 
       <!-- Matter 表示キャンバス -->
       <div id="screen-outer" style="position: relative; padding: 0.5em; background-color: black">

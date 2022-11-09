@@ -904,8 +904,8 @@ window.addEventListener('load', () => {
   });
   setup();
 
-  //changeFont(selectedValue($('#font-size')[0]), selectedValue($('#font-type')[0])==="system");
-  changeFont(16, false);
+  changeFont(selectedValue($('#font-size')[0]), selectedValue($('#font-type')[0])==="system");
+  //changeFont(16, false);
 
   // ------------------------------------------------------------
 
