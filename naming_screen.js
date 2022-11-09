@@ -113,6 +113,8 @@ class NamingScreen
     // (Curses.lines - 13)/2
     const tm = 3
 
+    candidates.sort()
+
     let command_row
     if (candidates.size > 0) {
       command_row = ["かなカナ英数", "おぎなう", "けす", "おわる"]
@@ -162,14 +164,6 @@ class NamingScreen
 
     const handle_input = (c) => {
       switch (c) {
-      case 9:
-        handle_input('l')
-        break
-
-      case Curses.KEY_BTAB:
-        handle_input('h')
-        break
-
       case 'h':
       case Curses.KEY_LEFT:
         x = (x - 1).mod(y == 0 ? command_row.length : this.LAYERS[layer_index][y-1].length)
@@ -230,6 +224,32 @@ class NamingScreen
       case 'q':
         throw null
 
+      case Curses.KEY_BTAB:
+        if (candidates.index(name) !== null) {
+          const i = (candidates.index(name) - 1).mod(candidates.length)
+          name = candidates[i]
+        } else {
+          Curses.beep()
+        }
+        break
+
+      case 9:
+        // おぎなう
+        {
+          if (candidates.index(name) !== null) {
+            const i = (candidates.index(name) + 1).mod(candidates.length)
+            name = candidates[i]
+          } else {
+            const arr = candidates.filter(str => str.startsWith(name))
+            if (arr.length) {
+              name = arr[0]
+            } else {
+              Curses.beep()
+            }
+          }
+        }
+        break
+
       case 10:
         if (y == 0) {
           switch (command_row[x]) {
@@ -242,12 +262,7 @@ class NamingScreen
             break
 
           case "おぎなう":
-            {
-              const completion = sharedPrefix(... candidates.filter(str => str.startsWith(name)))
-              if (!candidates.include_p(completion))
-                Curses.beep()
-              name = completion
-            }
+            handle_input(9)
             break
 
           case "けす":
