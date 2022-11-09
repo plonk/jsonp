@@ -324,11 +324,13 @@ function renderSoftCharacter(char, ctx, x, y, cell, fgStyle, halfWidth, doubleWi
     var fontx   = (offset * cs.fontWidth) % cs.canvas.width;
     var fontctx = cs.canvas.getContext('2d');
     if ((halfWidth % cs.fontWidth) == 0 && (metrics.height % cs.fontHeight) == 0) {
-      ctx.mozImageSmoothingEnabled = false;
-      ctx.webkitImageSmoothingEnabled = false;
+      // ctx.mozImageSmoothingEnabled = false;
+      // ctx.webkitImageSmoothingEnabled = false;
+      ctx.imageSmoothingEnabled = false;
     } else {
-      ctx.mozImageSmoothingEnabled = true;
-      ctx.webkitImageSmoothingEnabled = true;
+      // ctx.mozImageSmoothingEnabled = true;
+      // ctx.webkitImageSmoothingEnabled = true;
+      ctx.imageSmoothingEnabled = true;
     }
     ctx.drawImage(cs.canvas, fontx, fonty, cs.fontWidth, cs.fontHeight,
                   x * halfWidth, y * metrics.height, halfWidth, metrics.height);
