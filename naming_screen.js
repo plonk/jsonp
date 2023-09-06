@@ -162,6 +162,15 @@ class NamingScreen
       return result
     }
 
+    const xnormalized = () => {
+      console.log({x, y})
+      if (y == 0) {
+        return (command_row.slice(0, x + 1).join("　").length - command_row[x].length) / (command_row.join("　").length + 2)
+      } else {
+        return x / this.LAYERS[layer_index][y-1].length
+      }
+    }
+
     const handle_input = (c) => {
       switch (c) {
       case 'h':
@@ -173,9 +182,11 @@ class NamingScreen
       case Curses.KEY_DOWN:
         {
           const old_length = (y == 0 ? command_row.length : this.LAYERS[layer_index][y-1].length)
+          const xx = xnormalized()
+          console.log(xx)
           y = (y + 1).mod(this.LAYERS[layer_index].length + 1)
           const new_length = (y == 0 ? command_row.length : this.LAYERS[layer_index][y-1].length)
-          x = Math.floor(x / old_length * new_length)
+          x = Math.floor(xx * new_length)
         }
         break
 
@@ -183,9 +194,11 @@ class NamingScreen
       case Curses.KEY_UP:
         {
           const old_length = (y == 0 ? command_row.length : this.LAYERS[layer_index][y-1].length)
+          const xx = xnormalized()
+          console.log(xx)
           y = (y - 1).mod(this.LAYERS[layer_index].length + 1)
           const new_length = (y == 0 ? command_row.length : this.LAYERS[layer_index][y-1].length)
-          x = Math.floor(x / old_length * new_length)
+          x = Math.floor(xx * new_length)
         }
         break
 
